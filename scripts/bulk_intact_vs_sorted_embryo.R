@@ -42,11 +42,12 @@ if(Processing.design.matrix){
   colnames(design) = c('SampleID',  'treatment', 'adaptor.concentration', 'genotype')
   
   kk = grep("dissociated", design$treatment)
-  design$treatment[kk] = "dissociated.sorted"
-
+  design$treatment[kk] = "sorted"
+  #design$treatment[kk] = "embryo"
+  
   kk = c(1:6)
-  design$adaptor.concentration[kk] = "Tn5.1.75"
-  design$adaptor.concentration[-kk] = "Tn5.1.150"
+  design$adaptor.concentration[kk] = "Tn5.75"
+  design$adaptor.concentration[-kk] = "Tn5.150"
   design$genotype = "N2"
   #design = design[order(design$stage, design$treatment), ]
   #design$tissue.cell[which(design$genotype=="henn-1_mutant" & design$promoter=="no_promoter")] = "whole.body_no_promoter"
@@ -86,7 +87,8 @@ if(length(xlist)>1){
 
 
 # processing count table
-all = process.countTable(all=all, design = design);
+source('scRNAseq_functions.R')
+all = process.countTable(all=all, design = design[, c(1:3)]);
 
 #### Import Sample information and table of read counts
 #design = read.xlsx(paste0(design.file), sheet = 1, colNames = TRUE)
@@ -97,13 +99,12 @@ all = process.countTable(all=all, design = design);
 #all = read.delim(data.file, sep = "\t", header = TRUE)
 # processing count table
 #all = process.countTable(all=all, design = design);
+#spikes = read.delim(spikes.file, sep="\t", header = TRUE, row.names = 1)
+#spikes = t(as.matrix(spikes))
+#spikes = data.frame(gene=rownames(spikes), spikes, stringsAsFactors = FALSE)
+#spikes = process.countTable(all=spikes, design = design, select.Total.count = FALSE)
 
-spikes = read.delim(spikes.file, sep="\t", header = TRUE, row.names = 1)
-spikes = t(as.matrix(spikes))
-spikes = data.frame(gene=rownames(spikes), spikes, stringsAsFactors = FALSE)
-spikes = process.countTable(all=spikes, design = design, select.Total.count = FALSE)
-
-all = rbind(spikes, all);
+#all = rbind(spikes, all);
 #spikes = process.countTable(spikes, design)
 
 save(design, all, file=paste0(RdataDir, 'Design_Raw_readCounts_', version.analysis, '.Rdata'))
@@ -131,11 +132,12 @@ QC.for.cpm = FALSE
 if(QC.for.cpm){
   #treat = length(unique(design$treatment[kk]));
   #index.qc = c(3, 5)[which(c(length(unique(design.matrix$genotype)), length(unique(design.matrix$promoter)))>1)]
-  index.qc = c(1, 3,4)
+  index.qc = c(1, 3, 4)
   
   source("RNAseq_Quality_Controls.R")
-  pdfname = paste0(resDir, "/Data_qulity_assessment_early_L1_and_all", version.analysis, ".pdf")
+  pdfname = paste0(resDir, "/Data_qulity_assessment_intact_sorted_", version.analysis, ".pdf")
   pdf(pdfname, width = 12, height = 10)
-  Check.RNAseq.Quality(read.count=read.count[, kk], design.matrix = design.matrix[, index.qc])
+  Check.RNAseq.Quality(read.count=read.count[, kk], design.matrix = design.matrix[, index.qc], lowlyExpressed.readCount.threshold = 20)
   dev.off()
+  
 }

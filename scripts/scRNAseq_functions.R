@@ -7,6 +7,46 @@
 ## Date of creation: Thu Feb 22 14:51:03 2018
 ##################################################
 ##################################################
+process.countTable = function(all, design, additional.filter = NULL)
+{
+  newall = data.frame(as.character(all[,1]), stringsAsFactors = FALSE)
+  
+  for(n in 1:nrow(design))
+  {
+    #n = 1;
+    ## found the matching ID in design matrix
+    if(!is.null(additional.filter)){
+      jj = intersect(grep(design$SampleID[n], colnames(all)), grep(additional.filter, colnames(all)));
+    }else{
+      jj = grep(design$SampleID[n], colnames(all));
+    }
+    
+    ## deal with several mapping 
+    if(length(jj)==1) {
+      #index = c(index,jj)
+      newall = data.frame(newall, all[, jj])
+    }else{
+      cat(length(jj), " samples found for ID", design$SampleID[n], "\n")
+      cat("start to merge those samples considering them as technical replicates...\n")
+      newall = data.frame(newall, apply(as.matrix(all[, jj]), 1, sum))
+    }
+  }
+  
+  colnames(newall)[1] = "gene";
+  jj = which(colnames(design)=="SampleID")
+  o1 = c(setdiff(c(1:ncol(design)), jj),jj)
+  #design = design
+  colnames(newall)[-1] = apply(design[, o1], 1, function(x) paste0(x, collapse = "_"))
+  
+  #if(time.series){
+  #  colnames(newall)[-1] = paste0(design$stage, "_", design$treatment, "_", design$SampleID)
+  #}else{
+  #}
+  
+  return(newall)
+}
+
+
 ## common functions for normalizations from Hemberg lab
 calc_cpm <- function (expr_mat, spikes = NULL) 
 {
