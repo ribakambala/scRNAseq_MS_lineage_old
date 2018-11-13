@@ -118,7 +118,7 @@ save(design, aa, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.R
 # Section: Quality control, process and clean the count table for scRNA-seq
 # 1) remove genes with zero read across all cells
 # 2) convert emsemble gene annotation to gene symbols
-# 3) make 
+# 3) make singleCellExperiment object
 ##################################################
 ##################################################
 load( file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
@@ -152,19 +152,18 @@ rownames(counts) = ggs
 library(SingleCellExperiment)
 library(scater)
 require(scran)
-library(limma)
+#library(limma)
 options(stringsAsFactors = FALSE)
 
 ## make SCE object and remove genes with zero reads detected
 sce <- SingleCellExperiment(assays = list(counts = counts), 
-                            colData = as.data.frame(colnames(counts)), 
+                            colData = as.data.frame(design), 
                             rowData = data.frame(gene_names = rownames(counts), feature_symbol = rownames(counts)))
 
 write.csv(counts(sce), file=paste0(tabDir, "scRNAseq_raw_readCounts", version.analysis, ".csv"), row.names=TRUE)
 
 keep_feature <- rowSums(counts(sce) > 0) > 0
 sce <- sce[keep_feature, ]
-
 
 #is.spike <- grepl("^ERCC", rownames(sce))
 is.mito <- rownames(sce) %in% gg.Mt;
@@ -189,7 +188,7 @@ hist(sce$log10_total_counts, xlab="Library sizes (in log10)", main="",
      breaks=20, col="grey80", ylab="Number of cells")
 abline(v=c(6, 5, 4), col="red", lwd=2.0)
 
-hist(sce$total_features, xlab="Number of expressed genes", main="", 
+hist(sce$total_features_by_counts_endogenous, xlab="Number of expressed genes", main="", 
      breaks=20, col="grey80", ylab="Number of cells")
 #hist(sce$pct_counts_ERCC, xlab="ERCC proportion (%)", 
 #     ylab="Number of cells", breaks=20, main="", col="grey80")
@@ -200,17 +199,18 @@ hist(sce$pct_counts_Ribo, xlab="ribo proportion (%)", main="",
      breaks=20, col="grey80", ylab="Number of cells")
 
 par(mfrow=c(1, 1))
-plot(sce$total_counts, sce$total_features, xlab="Library size", ylab='Nb of expressed genes', log='xy')
+plot(sce$total_counts, sce$total_features_by_counts, xlab="Library size", ylab='Nb of expressed genes', log='xy')
 abline(v=c(10^4, 10^5, 10^6), col='red', lwd=2.0)
 abline(h=c(100, 200, 1000, 2000), col='red', lwd=2.0)
 
 plotColData(sce, 
-            y = "log10_total_features",
+            y = "log10_total_features_by_counts",
             x = "log10_total_counts",
             colour_by = "pct_counts_Ribo",
             size_by = "pct_counts_Mt"
 )
 
+dev.off()
 ## here we are using the 50,000 for library size and 100 expressed genes as thresholds
 threshod.total.counts.per.cell = 10^5
 threshod.nb.detected.genes.per.cell = 1000;
@@ -220,7 +220,7 @@ threshod.nb.detected.genes.per.cell = 1000;
 #feature.drop = sce$total_features < 200
 filter_by_total_counts <- (sce$total_counts > threshod.total.counts.per.cell)
 table(filter_by_total_counts)
-filter_by_expr_features <- (sce$total_features > threshod.nb.detected.genes.per.cell)
+filter_by_expr_features <- (sce$total_features_by_counts > threshod.nb.detected.genes.per.cell)
 table(filter_by_expr_features)
 filter_by_MT = sce$pct_counts_Mt < 5
 table(filter_by_MT)
@@ -245,7 +245,7 @@ if(Manual.vs.outlier.filtering)
 {
   sce <- plotPCA(
     sce,
-    size_by = "total_features", 
+    size_by = "total_features_by_counts", 
     #shape_by = "",
     by_exprs_values = "logcounts",
     shape_by = "use",
@@ -266,9 +266,6 @@ if(Manual.vs.outlier.filtering)
     circle.col = c("blue", "green")
   )
 }
-
-
-dev.off()
 
 sce = sce[, sce$use]
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_filtered_SCE.Rdata'))
@@ -295,7 +292,7 @@ smoothScatter(log10(ave.counts), num.cells, ylab="Number of cells",
               xlab=expression(Log[10]~"average count"))
 dev.off()
 
-genes.to.keep <- num.cells > 10 & ave.counts >= 1  & ave.counts <10^6  # detected in >= 2 cells, ave.counts >=5 but not too high
+genes.to.keep <- num.cells > 5 & ave.counts >= 1  & ave.counts <10^6  # detected in >= 2 cells, ave.counts >=5 but not too high
 summary(genes.to.keep)
 
 # remove mt and ribo genes
@@ -312,6 +309,9 @@ save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_SCE.Rd
 # batch correction
 # codes original from Hemberg's course
 # https://hemberg-lab.github.io/scRNA.seq.course/cleaning-the-expression-matrix.html#data-visualization
+##########
+# Among all normalization methods, DESeq2 and scran normalization will be used
+# consider seurat for UMI counts, but here we are just working on the read counts
 ########################################################
 ########################################################
 Data.visulization.exploration = FALSE
@@ -336,7 +336,7 @@ if(Data.visulization.exploration)
     sce[endog_genes, ],
     run_args = list( exprs_values = "logcounts_raw"), 
     colour_by = "total_counts",
-    size_by = "total_features"
+    size_by = "total_features_by_counts"
     #shape_by = "individual"
   )
   
@@ -344,7 +344,7 @@ if(Data.visulization.exploration)
     sce[endog_genes, ],
     run_args = list( exprs_values = "logcounts_raw"), 
     colour_by = "total_counts",
-    size_by = "total_features"
+    size_by = "total_features_by_counts"
     #shape_by = "individual"
   )
   
@@ -352,7 +352,7 @@ if(Data.visulization.exploration)
     sce[endog_genes, ],
     run_args = list( exprs_values = "logcounts_raw"), 
     colour_by = "total_counts",
-    size_by = "total_features"
+    size_by = "total_features_by_counts"
     #shape_by = "individual"
   )
   
@@ -360,7 +360,7 @@ if(Data.visulization.exploration)
     sce[endog_genes, ],
     run_args = list( exprs_values = "logcounts_raw"), 
     colour_by = "total_counts",
-    size_by = "total_features"
+    size_by = "total_features_by_counts"
     #shape_by = "individual"
   )
  
@@ -371,7 +371,7 @@ if(Data.visulization.exploration)
     run_args=list(exprs_values="logcounts_raw", 
                   perplexity=param.perplexity),
     colour_by = "total_counts",
-    size_by = "total_features"               
+    size_by = "total_features_by_counts"               
   )
   
   
@@ -380,7 +380,7 @@ if(Data.visulization.exploration)
     sce[endog_genes, ],
     type = "find-pcs",
     exprs_values = "logcounts_raw",
-    variable = "total_features"
+    variable = "total_features_by_counts"
   )
   
   plotQC(
@@ -388,7 +388,7 @@ if(Data.visulization.exploration)
     type = "expl",
     exprs_values = "logcounts_raw",
     variables = c(
-      "total_features",
+      "total_features_by_counts",
       "total_counts",
       "pct_counts_Mt"
     )
@@ -409,6 +409,12 @@ reducedDim(sce) <- NULL
 sce.qc = sce
 endog_genes <- !rowData(sce)$is_feature_control
 
+# specify the shapes for bulk control and early cells (supposed to be)
+shapes = rep(1, ncol(sce))
+shapes[which(sce$sampleInfo=="bulk.control")] = 3
+shapes[which(sce$sampleInfo=="early")] = 2
+shapes = data.frame(shapes)
+
 library(scran)
 options(stringsAsFactors = FALSE)
 set.seed(1234567)
@@ -419,22 +425,22 @@ par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
 ### raw counts in log scale
 plotPCA(
-  sce[endog_genes, ],
+  sce.qc[endog_genes, ],
   run_args = list(exprs_values = "logcounts_raw"), 
-  colour_by = "total_counts",
-  size_by = "total_features"
-  #shape_by = "individual"
-)
+  colour_by = "sampleInfo",
+  size_by = "total_features_by_counts"
+  #shape_by = "sampleInfo"
+) + ggtitle("PCA using logcounts_raw")
 
 ### cpm
 logcounts(sce.qc) <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
-plotPCA(
+scater::plotPCA(
   sce.qc[endog_genes, ],
   run_args = list(exprs_values = "logcounts"), 
   colour_by = "total_counts",
-  size_by = "total_features"
+  size_by = "total_features_by_counts"
   #shape_by = "individual"
-)
+) + ggtitle("PCA using cpm")
 
 try.TMM = FALSE
 if(try.TMM){
@@ -449,7 +455,7 @@ if(try.TMM){
   plotPCA(
     sce.qc[endog_genes, ],
     colour_by = "total_counts",
-    size_by = "total_features"
+    size_by = "total_features_by_counts"
   )
 }
 
@@ -461,20 +467,20 @@ sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
 plotPCA(
   sce.qc[endog_genes, ],
   colour_by = "total_counts",
-  size_by = "total_features"
-)
+  size_by = "total_features_by_counts",
+  shape_by = shapes
+) + ggtitle("scran normalization")
 
-param.perplexity = 2;
+param.perplexity = 10;
 plotTSNE(
   sce.qc[endog_genes, ],
   run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
   colour_by = "total_counts",
-  size_by = "total_features"
-  #shape_by = "individual"
-)
+  size_by = "total_features_by_counts",
+  shape_by = shapes
+) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity))
 
-
-if(any(sizeFactors(sce)<0)){
+if(any(sizeFactors(sce.qc)<0)){
   cat("ERROR........")
   cat("NEGATIVE size factors FOUND !!! \n" )
   cat(sizeFactors(sce), "\n")
@@ -482,28 +488,12 @@ if(any(sizeFactors(sce)<0)){
   plot(sizeFactors(sce.qc), sce.qc$total_counts/1e6, log="xy",
        ylab="Library size (millions)", xlab="Size factor")
   
-  sce = sce.qc;
-  #sce <- normalize(sce)
-  
-  plotPCA(
-    sce,
-    colour_by = "total_counts",
-    size_by = "total_features"
-  )
-  
-  param.perplexity = 20;
-  plotTSNE(
-    sce,
-    run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
-    colour_by = "total_counts",
-    size_by = "total_features"
-    #shape_by = "individual"
-  )
-  
 }
 
 dev.off()
 
+## save the normalized sce object
+sce = sce.qc;
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
 
 write.csv(logcounts(sce), file=paste0(tabDir, "scRNAseq_QC_filtered_normalized_readCounts.csv"), row.names=TRUE)
@@ -570,21 +560,21 @@ if(TEST.Aaron.workflow)
   
   # low-dimension visulization
   plotReducedDim(sce, use_dimred="PCA", ncomponents=4, 
-                 colour_by="total_features") + fontsize
+                 colour_by="total_features_by_counts") + fontsize
   
-  #plotReducedDim(sce, use_dimred="PCA", ncomponents=4, colour_by="total_features") + fontsize + 
+  #plotReducedDim(sce, use_dimred="PCA", ncomponents=4, colour_by="total_features_by_counts") + fontsize + 
   
   set.seed(100)
   out5 <- plotTSNE(sce, run_args=list(use_dimred="PCA", perplexity=5),
-                   colour_by="total_features") + fontsize + ggtitle("Perplexity = 5")
+                   colour_by="total_features_by_counts") + fontsize + ggtitle("Perplexity = 5")
   
   set.seed(100)
   out10 <- plotTSNE(sce, run_args=list(use_dimred="PCA", perplexity=10),
-                    colour_by="total_features") + fontsize + ggtitle("Perplexity = 10")
+                    colour_by="total_features_by_counts") + fontsize + ggtitle("Perplexity = 10")
   
   set.seed(100)
   out20 <- plotTSNE(sce, run_args=list(use_dimred="PCA", perplexity=20),
-                    colour_by="total_features") + fontsize + ggtitle("Perplexity = 20")
+                    colour_by="total_features_by_counts") + fontsize + ggtitle("Perplexity = 20")
   
   multiplot(out5, out10, out20, cols=3)
   
@@ -599,6 +589,8 @@ if(TEST.Aaron.workflow)
   my.dist <- dist(pcs)
   my.tree <- hclust(my.dist, method="ward.D2")
   
+  hist(my.tree)
+  
   library(dynamicTreeCut)
   my.clusters <- unname(cutreeDynamic(my.tree, method = "hybrid", 
                                       distM=as.matrix(my.dist), 
@@ -606,7 +598,9 @@ if(TEST.Aaron.workflow)
   
   sce$cluster <- factor(my.clusters)
   set.seed(100)
-  plotTSNE(sce, colour_by="cluster") + fontsize
+  plotTSNE(sce,
+           run_args = list(perplexity = 20),
+           colour_by="cluster", size_by = "total_features_by_counts", shape_by = shapes) + fontsize
   
   library(cluster)
   clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
@@ -623,9 +617,12 @@ if(TEST.Aaron.workflow)
   head(marker.set, 10)
   
   top.markers <- rownames(marker.set)[marker.set$Top <= 5]
-  plotHeatmap(sce, features=top.markers, columns=order(sce$cluster), 
+  plotHeatmap(sce, features=top.markers, 
+              columns=order(sce$cluster), 
               colour_columns_by=c("cluster"),
               cluster_cols=FALSE, center=TRUE, symmetric=TRUE, zlim=c(-5, 5)) 
+  
+  dev.off()
   
 }
 
@@ -641,8 +638,8 @@ if(Test.Seurat.workflow){
   
   #pbmc = as.seurat(from = sce)
   #pbmc = Convert(from = sce, to = 'seurat', raw.data.slot = "counts",data.slot = "logcounts")
-  #pbmc <- CreateSeuratObject(raw.data = counts(sce), min.cells = 0, min.genes = 200, 
-  #                           project = "seurat_test")
+  pbmc <- CreateSeuratObject(raw.data = counts(sce), min.cells = 0, min.genes = 200, 
+                             project = "seurat_test")
   pbmc <- NormalizeData(object = pbmc, normalization.method = "LogNormalize", 
                         scale.factor = 10000)
   
@@ -735,7 +732,7 @@ if(TEST.Hamberg.workflow.clustering)
     sce,
     run_args = list(exprs_values = "logcounts"),
     colour_by = "total_counts",
-    size_by = "total_features"
+    size_by = "total_features_by_counts"
   )
   
   ### test SC3 clustering method
@@ -759,7 +756,7 @@ if(TEST.Hamberg.workflow.clustering)
     sce, 
     colour_by = "sc3_3_clusters",
     shape_by = "celltypes",
-    size_by = "total_features"
+    size_by = "total_features_by_counts"
   )
   
   row_data <- rowData(sce)
@@ -775,7 +772,7 @@ if(TEST.Hamberg.workflow.clustering)
   )
   
   set.seed(1)
-  plotTSNE(sce, colour_by="sc3_6_clusters", size_by = "total_features",
+  plotTSNE(sce, colour_by="sc3_6_clusters", size_by = "total_features_by_counts",
            run_args = list(perplexity=20)) 
   
   #sc3_plot_consensus(sce, k = 3)
@@ -784,7 +781,7 @@ if(TEST.Hamberg.workflow.clustering)
     show_pdata = c(
       "celltypes", 
       "sc3_3_clusters", 
-      "log10_total_features",
+      "log10_total_features_by_counts",
       "log10_total_counts",
       
       "sc3_3_log2_outlier_score"
