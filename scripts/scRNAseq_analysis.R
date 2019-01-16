@@ -7,8 +7,8 @@
 ## Date of creation: Mon Feb 19 14:43:38 2018
 ##################################################
 ##################################################
-version.DATA = 'R6875_scRNA_v1'
-version.analysis =  paste0(version.DATA, '_20181106')
+version.DATA = 'R6875_R7116_R7130_scRNA_v1'
+version.analysis =  paste0(version.DATA, '_20190116')
 
 design.file = "../exp_design/R6875_sample_infos.xlsx"
 dataDir = paste0("../data/")
@@ -24,9 +24,62 @@ Manually.make.design.matrix = TRUE
 Use.sampleID.mapSamples = FALSE
 ##################################################
 ##################################################
-## Section: import sample design and data and prepare table 
+## Section: Import data first 
+## and then add metadata from the design matrix 
+## and then the quality controls from nf-RNAseq
 ##################################################
 ##################################################
+library(data.table)
+# first concatenate the data
+xlist <-list.files(path=dataDir, pattern = "*merged_gene_counts.txt", full.names = TRUE)
+aa = NULL
+
+for(n in 1:length(xlist))
+{
+  # n = 1
+  cat(n, '\t')
+  cat(xlist[n], '\n')
+  
+  if(n==1){
+    #aa = read.delim(xlist[n], header = TRUE);
+    #colnames(aa) = c('RefseqID', basename(xlist[n]))
+    #aa = data.frame(aa, stringsAsFactors = FALSE)
+    aa = data.frame(fread(xlist[n], header=TRUE, sep="\t", stringsAsFactors=FALSE), stringsAsFactors = FALSE)
+  }else{
+    test = data.frame(fread(xlist[n], header=TRUE, sep="\t", stringsAsFactors=FALSE), stringsAsFactors = FALSE)
+    mm = match(aa$ENSEMBL_ID, test$ENSEMBL_ID)
+    aa = data.frame(aa, test[mm, -grep('ENSEMBL_ID', colnames(test))])
+  }
+}
+
+colnames(aa)[1] = 'gene';
+jj = grep("CCVTBANXX_8.76090_", colnames(aa))
+aa = aa[, c(1, jj)]
+colnames(aa)[-1] = sapply(colnames(aa)[-1], function(x) gsub("CCVTBANXX_8.76090_", "", x))
+
+if(Use.sampleID.mapSamples){
+  index = c()
+  for(n in 1:nrow(design))
+  {
+    jj = grep(design$sampleID[n], colnames(aa))
+    if(length(jj)==1){index = c(index, jj)
+    }else{cat("NOT FOUND sample for ", design$sampleID[n], "\n")}
+  }
+  
+  aa = data.frame(aa$gene, aa[, index], stringsAsFactors = FALSE)
+  colnames(aa)[-1] = apply(design[, c(2,1)], 1, paste0, collapse="_")
+  colnames(aa)[1] = 'gene';
+}else{
+  
+  xx = colnames(aa)[-1]
+  xx = data.frame(xx, rep("others", length(xx)), stringsAsFactors = FALSE)
+  colnames(xx) = c("barcodes", "sampleInfo")  
+  mm = match(xx$barcodes, design$barcodes)
+  xx$sampleInfo[which(!is.na(mm))] = design$sampleInfo[mm[which(!is.na(mm))]]
+  design = xx;
+  
+}
+
 library("openxlsx")
 design = read.xlsx(design.file, sheet = 1, colNames = TRUE)
 
@@ -60,56 +113,7 @@ if(Manually.make.design.matrix){
   #design$conditions = sapply(design$conditions, function(x) gsub("_", "-", x))
 }
 
-##########################################
-# construct and clean expression matrix
-##########################################
-xlist <-list.files(path=dataDir, pattern = "*merged_gene_counts.txt", full.names = TRUE)
-#ylist = list.files(path=path, pattern = "Information_design*", full.names = TRUE)
-aa = NULL
-for(n in 1:length(xlist))
-{
-  cat(n, '\t')
-  cat(xlist[n], '\n')
-  
-  if(n==1){
-    aa = read.delim(xlist[n], header = TRUE);
-    #colnames(aa) = c('RefseqID', basename(xlist[n]))
-    aa = data.frame(aa, stringsAsFactors = FALSE)
-  }else{
-    test = read.delim(xlist[n], header = TRUE);
-    #colnames(test) = c('RefseqID',  basename(xlist[n]))
-    mm = match(aa$RefseqID, test$RefseqID)
-    aa = data.frame(aa, test[mm, -grep('RefseqID', colnames(test))])
-  }
-}
 
-colnames(aa)[1] = 'gene';
-jj = grep("CCVTBANXX_8.76090_", colnames(aa))
-aa = aa[, c(1, jj)]
-colnames(aa)[-1] = sapply(colnames(aa)[-1], function(x) gsub("CCVTBANXX_8.76090_", "", x))
-
-if(Use.sampleID.mapSamples){
-  index = c()
-  for(n in 1:nrow(design))
-  {
-    jj = grep(design$sampleID[n], colnames(aa))
-    if(length(jj)==1){index = c(index, jj)
-    }else{cat("NOT FOUND sample for ", design$sampleID[n], "\n")}
-  }
-  
-  aa = data.frame(aa$gene, aa[, index], stringsAsFactors = FALSE)
-  colnames(aa)[-1] = apply(design[, c(2,1)], 1, paste0, collapse="_")
-  colnames(aa)[1] = 'gene';
-}else{
-  
-  xx = colnames(aa)[-1]
-  xx = data.frame(xx, rep("others", length(xx)), stringsAsFactors = FALSE)
-  colnames(xx) = c("barcodes", "sampleInfo")  
-  mm = match(xx$barcodes, design$barcodes)
-  xx$sampleInfo[which(!is.na(mm))] = design$sampleInfo[mm[which(!is.na(mm))]]
-  design = xx;
-  
-}
 
 save(design, aa, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
 
