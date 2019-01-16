@@ -668,15 +668,16 @@ if(Test.Seurat.workflow){
   PCElbowPlot(object = pbmc)
   
   pbmc <- FindClusters(object = pbmc, reduction.type = "pca", dims.use = 1:10, 
-                       resolution = 1.5, print.output = 0, save.SNN = TRUE)
+                       resolution = 2, print.output = 0, save.SNN = TRUE)
   
   PrintFindClustersParams(object = pbmc)
   #PrintCalcParams(pbmc, calculation = "FindClusters")
   
-  pbmc <- RunTSNE(object = pbmc, dims.use = 1:10, do.fast = TRUE, perplexity=5, eta=2000)
+  pbmc <- RunTSNE(object = pbmc, dims.use = 1:10, do.fast = TRUE, perplexity=10, eta=2000)
   TSNEPlot(object = pbmc, do.label = TRUE, pt.size = 3.0)
   
-  pbmc_phate <- RunPHATE(object = pbmc, gamma=-0.5, npca = 10, k= 5, seed.use = 10)
+  ## test phate plot
+  pbmc_phate <- RunPHATE(object = pbmc, gamma=1, npca = 20, k=5, seed.use = 10, plot.optimal.t = TRUE, t=14)
   # Plot results
   DimPlot(object = pbmc_phate, reduction.use = 'phate', pt.size = 2.0)
   #DimPlot(object = pbmc_phate, reduction.use = 'pca')
