@@ -10,7 +10,7 @@
 version.DATA = 'R6875_R7116_R7130_scRNA_v1'
 version.analysis =  paste0(version.DATA, '_20190116')
 
-design.file = "../exp_design/R6875_sample_infos.xlsx"
+
 dataDir = paste0("../data/")
 
 resDir = paste0("../results/", version.analysis)
@@ -20,8 +20,10 @@ if(!dir.exists(resDir)){dir.create(resDir)}
 if(!dir.exists(tabDir)){dir.create(tabDir)}
 if(!dir.exists(RdataDir)){dir.create(RdataDir)}
 
-Manually.make.design.matrix = TRUE
-Use.sampleID.mapSamples = FALSE
+Manually.Specify.sampleInfos.4scRNAseq = TRUE
+Aggregate.nf.QCs.plots = TRUE
+#design.file = "../exp_design/R6875_sample_infos.xlsx"
+#Use.sampleID.mapSamples = FALSE
 ##################################################
 ##################################################
 ## Section: Import data first 
@@ -41,9 +43,6 @@ for(n in 1:length(xlist))
   cat(xlist[n], '\n')
   
   if(n==1){
-    #aa = read.delim(xlist[n], header = TRUE);
-    #colnames(aa) = c('RefseqID', basename(xlist[n]))
-    #aa = data.frame(aa, stringsAsFactors = FALSE)
     aa = data.frame(fread(xlist[n], header=TRUE, sep="\t", stringsAsFactors=FALSE), stringsAsFactors = FALSE)
   }else{
     test = data.frame(fread(xlist[n], header=TRUE, sep="\t", stringsAsFactors=FALSE), stringsAsFactors = FALSE)
@@ -53,69 +52,93 @@ for(n in 1:length(xlist))
 }
 
 colnames(aa)[1] = 'gene';
-jj = grep("CCVTBANXX_8.76090_", colnames(aa))
-aa = aa[, c(1, jj)]
-colnames(aa)[-1] = sapply(colnames(aa)[-1], function(x) gsub("CCVTBANXX_8.76090_", "", x))
 
-if(Use.sampleID.mapSamples){
-  index = c()
-  for(n in 1:nrow(design))
-  {
-    jj = grep(design$sampleID[n], colnames(aa))
-    if(length(jj)==1){index = c(index, jj)
-    }else{cat("NOT FOUND sample for ", design$sampleID[n], "\n")}
-  }
-  
-  aa = data.frame(aa$gene, aa[, index], stringsAsFactors = FALSE)
-  colnames(aa)[-1] = apply(design[, c(2,1)], 1, paste0, collapse="_")
-  colnames(aa)[1] = 'gene';
-}else{
-  
-  xx = colnames(aa)[-1]
-  xx = data.frame(xx, rep("others", length(xx)), stringsAsFactors = FALSE)
-  colnames(xx) = c("barcodes", "sampleInfo")  
-  mm = match(xx$barcodes, design$barcodes)
-  xx$sampleInfo[which(!is.na(mm))] = design$sampleInfo[mm[which(!is.na(mm))]]
-  design = xx;
-  
-}
-
-library("openxlsx")
-design = read.xlsx(design.file, sheet = 1, colNames = TRUE)
-
+##########################################
+# manually make design matrix 
+##########################################
 if(Manually.make.design.matrix){
   library(stringi)
-  design = data.frame(design$`Multiplex/Barcode`, design$Brief.Sample.Description, stringsAsFactors = FALSE)
-  colnames(design) = c("barcodes", "sampleInfo")
-  xx = design
-  design = xx
-  design$barcodes = gsub('[[:digit:]]+', '', design$barcodes)
-  design$barcodes = gsub(':', '', design$barcodes, fixed = TRUE)
-  design$barcodes = gsub("[ +]", "", design$barcodes)
-  design$barcodes = gsub("\\s", "", design$barcodes)    
-  design = design[-c(1:2), ]
-  design$sampleInfo[grep("bulk", design$sampleInfo)] = "bulk.control"
-  design$sampleInfo[grep("early", design$sampleInfo)] = "early"
+  library("openxlsx")
   
-  #design$barcodes = stri_replace_all(string=design$barcodes, pattern=" ", repl="", fixed = TRUE)
-   
-    #design$barcodes = gsub("[^*:]", "", design$barcodes)
-  #design$barcodes = gsub(" ", "", design$barcodes)
-  #design = design[which(!is.na(design$sampleID)), ]
-  #design$celltypes = sapply(design$celltypes, function(x) gsub("\\(", "", as.character(x)))
-  #design$celltypes = sapply(design$celltypes, function(x) gsub("\\)", "", as.character(x)))
-  #design$celltypes = sapply(design$celltypes, function(x) gsub(" ", ".", as.character(x)))
+  design = data.frame(samples = colnames(aa)[-1], stringsAsFactors = FALSE)
+  design$flowcell.lane = gsub(".\\w+$", "",  design$samples)
+  design$sampleIDs = gsub('^\\w+_\\d.', "", design$samples)
+  design$sampleIDs = gsub('_\\w+$', '', design$sampleIDs)
+  design$barcodes = gsub('^\\w+_\\d.\\d+_', '', design$samples)
   
-  #conditions = sapply(design$sampleInfo, function(x) paste0(rev(rev(unlist(strsplit(as.character(x), "_")))[-c(1:3)]), collapse="_"))
-  #times =  sapply(design$sampleInfo, function(x) rev(unlist(strsplit(as.character(x), "_")))[3])
+  ##########################################
+  # here manually 
+  ##########################################
+  if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
+    design$request = NA;
+    design$request[which(design$flowcell.lane == "CCVTBANXX_8")] = "R6875"
+    design$request[which(design$flowcell.lane == "CCVBPANXX_1")] = "R7116"
+    design$request[which(design$flowcell.lane == "HHG5KBGX9_1")] = "R7130"
+    design$request[which(design$flowcell.lane == "HHGHNBGX9_1")] = "R7130"
+    design$seqInfos = paste0(design$request, "_", design$flowcell.lane)
+    #jj = grep("CCVTBANXX_8.76090_", colnames(aa))
+    #aa = aa[, c(1, jj)]
+    #colnames(aa)[-1] = sapply(colnames(aa)[-1], function(x) gsub("CCVTBANXX_8.76090_", "", x))
+    kk = which(!is.na(design$request))
+    design = design[kk, ]
+    aa = aa[, c(1, kk+1)]
+  }
   
-  #design = data.frame(design[, c(1, 3, 2)],stringsAsFactors = FALSE)
-  #design$conditions = sapply(design$conditions, function(x) gsub("_", "-", x))
+  #design = read.xlsx(design.file, sheet = 1, colNames = TRUE)
+  #design = data.frame(design$`Multiplex/Barcode`, design$Brief.Sample.Description, stringsAsFactors = FALSE)
+  #colnames(design) = c("barcodes", "sampleInfo")
+  #xx = design
+  # design = xx
+  # design$barcodes = gsub('[[:digit:]]+', '', design$barcodes)
+  # design$barcodes = gsub(':', '', design$barcodes, fixed = TRUE)
+  # design$barcodes = gsub("[ +]", "", design$barcodes)
+  # design$barcodes = gsub("\\s", "", design$barcodes)    
+  # design = design[-c(1:2), ]
+  # design$sampleInfo[grep("bulk", design$sampleInfo)] = "bulk.control"
+  # design$sampleInfo[grep("early", design$sampleInfo)] = "early"
+  # 
+  # if(Use.sampleID.mapSamples){
+  #   index = c()
+  #   for(n in 1:nrow(design))
+  #   {
+  #     jj = grep(design$sampleID[n], colnames(aa))
+  #     if(length(jj)==1){index = c(index, jj)
+  #     }else{cat("NOT FOUND sample for ", design$sampleID[n], "\n")}
+  #   }
+  #   
+  #   aa = data.frame(aa$gene, aa[, index], stringsAsFactors = FALSE)
+  #   colnames(aa)[-1] = apply(design[, c(2,1)], 1, paste0, collapse="_")
+  #   colnames(aa)[1] = 'gene';
+  # }else{
+  #   
+  #   xx = colnames(aa)[-1]
+  #   xx = data.frame(xx, rep("others", length(xx)), stringsAsFactors = FALSE)
+  #   colnames(xx) = c("barcodes", "sampleInfo")  
+  #   mm = match(xx$barcodes, design$barcodes)
+  #   xx$sampleInfo[which(!is.na(mm))] = design$sampleInfo[mm[which(!is.na(mm))]]
+  #   design = xx;
+  #   
+  # }
 }
 
+##########################################
+# aggregated quality controls from nf-RNAseq 
+##########################################
+if(Aggregate.nf.QCs.plots){
+  load(file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
+  
+  #pdfname = paste0(resDir, "/scRNAseq_QCs_genes_filterting_", version.analysis, ".pdf")
+  #pdf(pdfname, width=10, height = 6)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
+  source('functions_aggregate_nf_qc.R')
+  dirs.all = c('../../../Ariane/R7116_R7130_scrnaseq/results_all/multiqc_data_1')
+  QCs.nf = aggrate.nf.QCs(dirs.all)
+  
+  dev.off()
+}
 
-
-save(design, aa, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
+save(aa, design, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
 
 ##################################################
 ##################################################
@@ -167,12 +190,14 @@ sce <- SingleCellExperiment(assays = list(counts = counts),
 write.csv(counts(sce), file=paste0(tabDir, "scRNAseq_raw_readCounts", version.analysis, ".csv"), row.names=TRUE)
 
 keep_feature <- rowSums(counts(sce) > 0) > 0
+
 sce <- sce[keep_feature, ]
 
 #is.spike <- grepl("^ERCC", rownames(sce))
 is.mito <- rownames(sce) %in% gg.Mt;
 is.ribo <- rownames(sce) %in% gg.ribo;
 summary(is.mito)
+summary(is.ribo)
 
 sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito, Ribo=is.ribo))
 head(colnames(colData(sce)))
@@ -210,12 +235,15 @@ abline(h=c(100, 200, 1000, 2000), col='red', lwd=2.0)
 plotColData(sce, 
             y = "log10_total_features_by_counts",
             x = "log10_total_counts",
-            colour_by = "pct_counts_Ribo",
-            size_by = "pct_counts_Mt"
+            colour_by = "flowcell.lane",
+            size_by = "pct_counts_Ribo"
 )
 
 dev.off()
-## here we are using the 50,000 for library size and 100 expressed genes as thresholds
+
+##########################################
+# here we are using the 50,000 for library size and 100 expressed genes as thresholds
+##########################################
 threshod.total.counts.per.cell = 10^5
 threshod.nb.detected.genes.per.cell = 1000;
 #libsize.drop <- isOutlier(sce$total_counts, nmads=3, type="lower", log=TRUE)
@@ -273,6 +301,7 @@ if(Manual.vs.outlier.filtering)
 
 sce = sce[, sce$use]
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_filtered_SCE.Rdata'))
+
 
 ####################
 ## filter lowly expressed (and probably too highly expressed genes)
@@ -414,10 +443,14 @@ sce.qc = sce
 endog_genes <- !rowData(sce)$is_feature_control
 
 # specify the shapes for bulk control and early cells (supposed to be)
-shapes = rep(1, ncol(sce))
-shapes[which(sce$sampleInfo=="bulk.control")] = 3
-shapes[which(sce$sampleInfo=="early")] = 2
-shapes = data.frame(shapes)
+Manully.Define.Shapes = FALSE
+if(Manully.Define.Shapes){
+  shapes = rep(1, ncol(sce))
+  shapes[which(sce$sampleInfo=="bulk.control")] = 3
+  shapes[which(sce$sampleInfo=="early")] = 2
+  shapes = data.frame(shapes)
+  
+}
 
 library(scran)
 options(stringsAsFactors = FALSE)
@@ -428,22 +461,22 @@ pdf(pdfname, width=10, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
 ### raw counts in log scale
-plotPCA(
-  sce.qc[endog_genes, ],
-  run_args = list(exprs_values = "logcounts_raw"), 
-  colour_by = "sampleInfo",
-  size_by = "total_features_by_counts"
-  #shape_by = "sampleInfo"
-) + ggtitle("PCA using logcounts_raw")
+#plotPCA(
+#  sce.qc[endog_genes, ],
+#  run_args = list(exprs_values = "logcounts_raw"), 
+#  colour_by = "sampleInfo",
+#  size_by = "total_features_by_counts"
+#  #shape_by = "sampleInfo"
+#) + ggtitle("PCA using logcounts_raw")
 
 ### cpm
 logcounts(sce.qc) <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
 scater::plotPCA(
   sce.qc[endog_genes, ],
   run_args = list(exprs_values = "logcounts"), 
-  colour_by = "total_counts",
-  size_by = "total_features_by_counts"
-  #shape_by = "individual"
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"
 ) + ggtitle("PCA using cpm")
 
 try.TMM = FALSE
@@ -464,24 +497,33 @@ if(try.TMM){
 }
 
 ## scran normalization (not working here, because negative scaling factor found)
-qclust <- quickCluster(sce.qc, min.size = 5)
-sce.qc <- computeSumFactors(sce.qc, sizes = 5, clusters = qclust)
+qclust <- quickCluster(sce.qc, min.size = 30)
+sce.qc <- computeSumFactors(sce.qc, sizes = 15, clusters = qclust)
 sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
+
+sumury(sizeFactors(sce.qc))
+range(sizeFactors(sce.qc))
+
+plot(sce.qc$total_counts/1e6, sizeFactors(sce.qc), log="xy",
+     xlab="Library size (millions)", ylab="Size factor",
+      pch=16)
+legend("bottomright", col=c("black"), pch=16, cex=1.2, 
+       legend = "size factor from scran vs total library size")
 
 plotPCA(
   sce.qc[endog_genes, ],
-  colour_by = "total_counts",
-  size_by = "total_features_by_counts",
-  shape_by = shapes
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"  
 ) + ggtitle("scran normalization")
 
 param.perplexity = 10;
 plotTSNE(
   sce.qc[endog_genes, ],
   run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
-  colour_by = "total_counts",
-  size_by = "total_features_by_counts",
-  shape_by = shapes
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"  
 ) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity))
 
 if(any(sizeFactors(sce.qc)<0)){
@@ -500,7 +542,7 @@ dev.off()
 sce = sce.qc;
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
 
-write.csv(logcounts(sce), file=paste0(tabDir, "scRNAseq_QC_filtered_normalized_readCounts.csv"), row.names=TRUE)
+#write.csv(logcounts(sce), file=paste0(tabDir, "scRNAseq_QC_filtered_normalized_readCounts.csv"), row.names=TRUE)
 
 ########################################################
 ########################################################
