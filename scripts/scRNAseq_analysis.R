@@ -21,7 +21,7 @@ if(!dir.exists(tabDir)){dir.create(tabDir)}
 if(!dir.exists(RdataDir)){dir.create(RdataDir)}
 
 Manually.Specify.sampleInfos.4scRNAseq = TRUE
-Aggregate.nf.QCs.plots = TRUE
+Aggregate.nf.QCs.plots.in.designMatrix = TRUE
 #design.file = "../exp_design/R6875_sample_infos.xlsx"
 #Use.sampleID.mapSamples = FALSE
 ##################################################
@@ -56,7 +56,7 @@ colnames(aa)[1] = 'gene';
 ##########################################
 # manually make design matrix 
 ##########################################
-if(Manually.make.design.matrix){
+if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
   library(stringi)
   library("openxlsx")
   
@@ -69,21 +69,20 @@ if(Manually.make.design.matrix){
   ##########################################
   # here manually 
   ##########################################
-  if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
-    design$request = NA;
-    design$request[which(design$flowcell.lane == "CCVTBANXX_8")] = "R6875"
-    design$request[which(design$flowcell.lane == "CCVBPANXX_1")] = "R7116"
-    design$request[which(design$flowcell.lane == "HHG5KBGX9_1")] = "R7130"
-    design$request[which(design$flowcell.lane == "HHGHNBGX9_1")] = "R7130"
-    design$seqInfos = paste0(design$request, "_", design$flowcell.lane)
-    #jj = grep("CCVTBANXX_8.76090_", colnames(aa))
-    #aa = aa[, c(1, jj)]
-    #colnames(aa)[-1] = sapply(colnames(aa)[-1], function(x) gsub("CCVTBANXX_8.76090_", "", x))
-    kk = which(!is.na(design$request))
-    design = design[kk, ]
-    aa = aa[, c(1, kk+1)]
-  }
+  design$request = NA;
+  design$request[which(design$flowcell.lane == "CCVTBANXX_8")] = "R6875"
+  design$request[which(design$flowcell.lane == "CCVBPANXX_1")] = "R7116"
+  design$request[which(design$flowcell.lane == "HHG5KBGX9_1")] = "R7130"
+  design$request[which(design$flowcell.lane == "HHGHNBGX9_1")] = "R7130"
+  design$seqInfos = paste0(design$request, "_", design$flowcell.lane)
+  #jj = grep("CCVTBANXX_8.76090_", colnames(aa))
+  #aa = aa[, c(1, jj)]
+  #colnames(aa)[-1] = sapply(colnames(aa)[-1], function(x) gsub("CCVTBANXX_8.76090_", "", x))
+  kk = which(!is.na(design$request))
+  design = design[kk, ]
+  aa = aa[, c(1, kk+1)]
   
+}else{
   #design = read.xlsx(design.file, sheet = 1, colNames = TRUE)
   #design = data.frame(design$`Multiplex/Barcode`, design$Brief.Sample.Description, stringsAsFactors = FALSE)
   #colnames(design) = c("barcodes", "sampleInfo")
@@ -124,31 +123,36 @@ if(Manually.make.design.matrix){
 ##########################################
 # aggregated quality controls from nf-RNAseq 
 ##########################################
-if(Aggregate.nf.QCs.plots){
-  load(file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
-  
-  #pdfname = paste0(resDir, "/scRNAseq_QCs_genes_filterting_", version.analysis, ".pdf")
-  #pdf(pdfname, width=10, height = 6)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+if(Aggregate.nf.QCs.plots.in.designMatrix){
+  #load(file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
   
   source('functions_aggregate_nf_qc.R')
-  dirs.all = c('../../../Ariane/R7116_R7130_scrnaseq/results_all/multiqc_data_1')
+  dirs.all = c('../../../Ariane/R7116_R7130_scrnaseq/results_all/multiqc_data_1', 
+               "../../../Ariane/R6875_scRNAseq/results_all_3rd/MultiQC/multiqc_data")
   QCs.nf = aggrate.nf.QCs(dirs.all)
+  QCs.nf$Sample = gsub("#", ".", QCs.nf$Sample)
   
-  dev.off()
+  mm = match(design$samples, QCs.nf$Sample)
+  xx = data.frame(design, QCs.nf[mm, ], stringsAsFactors = FALSE)
+  
+  design = xx;
+   
 }
 
-save(aa, design, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
+save(aa, design, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_sampleInfos_QCs_nf_RNA_seq.Rdata'))
 
 ##################################################
 ##################################################
 # Section: Quality control, process and clean the count table for scRNA-seq
-# 1) remove genes with zero read across all cells
-# 2) convert emsemble gene annotation to gene symbols
-# 3) make singleCellExperiment object
 ##################################################
 ##################################################
-load( file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
+load(file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_sampleInfos_QCs_nf_RNA_seq.Rdata'))
+
+##########################################
+# first round cleaning the count table:
+# a) keep only rows for mapped transripts
+# b) map the gene names to the gene symbols
+##########################################
 aa = aa[ grep("^__", aa$gene, invert = TRUE), ] ## remove features that are not well aligned
 
 ## load annotation and change the gene names
@@ -175,23 +179,31 @@ ggs.unique = unique(ggs)
 
 rownames(counts) = ggs
 
-## import packages for the QC and table cleaning
+##########################################
+# Import SingleCellExperiment and scater packages for the QC and table cleaning
+# several steps will be proceded:
+# 1) general overview of data quality: sequencing depth, mapping rate, assignment rate, rRAN codamination for each sequencing lane
+# 2) clean the cells 
+# 3) clean genes 
+##########################################
 library(SingleCellExperiment)
 library(scater)
-require(scran)
-#library(limma)
 options(stringsAsFactors = FALSE)
+
+## add some new features for design for quality controls
+design$log10_Total = log10(design$total_reads)
+#design$percent_mapped = design$uniquely_mapped/design$T
+#design$percent_assigned = design$Assigned/design$uniquely_mapped
+design$percent_rRNA = design$rRNA / design$Total
 
 ## make SCE object and remove genes with zero reads detected
 sce <- SingleCellExperiment(assays = list(counts = counts), 
                             colData = as.data.frame(design), 
                             rowData = data.frame(gene_names = rownames(counts), feature_symbol = rownames(counts)))
-
-write.csv(counts(sce), file=paste0(tabDir, "scRNAseq_raw_readCounts", version.analysis, ".csv"), row.names=TRUE)
-
+#write.csv(counts(sce), file=paste0(tabDir, "scRNAseq_raw_readCounts", version.analysis, ".csv"), row.names=TRUE)
 keep_feature <- rowSums(counts(sce) > 0) > 0
-
 sce <- sce[keep_feature, ]
+
 
 #is.spike <- grepl("^ERCC", rownames(sce))
 is.mito <- rownames(sce) %in% gg.Mt;
@@ -208,36 +220,50 @@ head(colnames(colData(sce)))
 pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting_", version.analysis, ".pdf")
 pdf(pdfname, width=10, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-#par(mfrow=c(1, 1))
-# par(mfcol=c(1, 1))
+#coldata.sce = data.frame(colData(sce))
+#rRNA.contamination = coldata.sce$rRNA/coldata.sce$Total
+plotColData(sce, 
+            x = "log10_Total",
+            y = "uniquely_mapped_percent",
+            #colour_by = "uniquely_mapped_percent",
+            colour_by = "seqInfos",
+            size_by = "percent_rRNA"
+)
 
-par(mfrow=c(2,2), mar=c(5.1, 4.1, 0.1, 0.1))
-
-hist(sce$log10_total_counts, xlab="Library sizes (in log10)", main="", 
-     breaks=20, col="grey80", ylab="Number of cells")
-abline(v=c(6, 5, 4), col="red", lwd=2.0)
-
-hist(sce$total_features_by_counts_endogenous, xlab="Number of expressed genes", main="", 
-     breaks=20, col="grey80", ylab="Number of cells")
-#hist(sce$pct_counts_ERCC, xlab="ERCC proportion (%)", 
-#     ylab="Number of cells", breaks=20, main="", col="grey80")
-hist(sce$pct_counts_Mt, xlab="Mitochondrial proportion (%)", 
-     ylab="Number of cells", breaks=20, main="", col="grey80")
-
-hist(sce$pct_counts_Ribo, xlab="ribo proportion (%)", main="", 
-     breaks=20, col="grey80", ylab="Number of cells")
-
-par(mfrow=c(1, 1))
-plot(sce$total_counts, sce$total_features_by_counts, xlab="Library size", ylab='Nb of expressed genes', log='xy')
-abline(v=c(10^4, 10^5, 10^6), col='red', lwd=2.0)
-abline(h=c(100, 200, 1000, 2000), col='red', lwd=2.0)
 
 plotColData(sce, 
-            y = "log10_total_features_by_counts",
             x = "log10_total_counts",
-            colour_by = "flowcell.lane",
+            y = "log10_total_features_by_counts",
+            #colour_by = "percent_mapped",
+            colour_by = "seqInfos",
+            size_by = "uniquely_mapped_percent"
+) + scale_x_continuous(limits=c(4, 7)) +
+  scale_y_continuous(limits = c(2.5, 4.1)) +
+  geom_hline(yintercept=log10(c(500, 1000, 5000)) , linetype="dashed", color = "darkgray", size=0.5) +
+  geom_vline(xintercept = c(4:6), linetype="dotted", color = "black", size=0.5)
+
+plotColData(sce, 
+            x = "log10_total_counts",
+            y = "log10_total_features_by_counts",
+            #colour_by = "percent_mapped",
+            colour_by = "seqInfos",
             size_by = "pct_counts_Ribo"
-)
+) + scale_x_continuous(limits=c(4, 7)) +
+  scale_y_continuous(limits = c(2.5, 4.1)) +
+  geom_hline(yintercept=log10(c(500, 1000, 5000)) , linetype="dashed", color = "darkgray", size=0.5) +
+  geom_vline(xintercept = c(4:6), linetype="dotted", color = "black", size=0.5)
+
+plotColData(sce, y="log10_total_counts", x="seqInfos")
+plotColData(sce, y="total_features_by_counts", x="seqInfos")
+plotColData(sce, y="pct_counts_Ribo", x="seqInfos")
+plotColData(sce, y="pct_counts_Mt", x="seqInfos")
+
+
+#par(mfrow=c(1, 1))
+#plot(sce$total_counts, sce$total_features_by_counts, xlab="Library size", ylab='Nb of expressed genes', log='xy')
+#abline(v=c(10^4, 10^5, 10^6), col='red', lwd=2.0)
+#abline(h=c(100, 200, 1000, 2000), col='red', lwd=2.0)
+
 
 dev.off()
 
@@ -254,7 +280,7 @@ filter_by_total_counts <- (sce$total_counts > threshod.total.counts.per.cell)
 table(filter_by_total_counts)
 filter_by_expr_features <- (sce$total_features_by_counts > threshod.nb.detected.genes.per.cell)
 table(filter_by_expr_features)
-filter_by_MT = sce$pct_counts_Mt < 5
+filter_by_MT = sce$pct_counts_Mt < 7.5
 table(filter_by_MT)
 
 sce$use <- ( 
@@ -273,8 +299,7 @@ table(sce$use)
 
 ## comparison between manual filtering and automatic ouliter filtering
 Manual.vs.outlier.filtering = FALSE
-if(Manual.vs.outlier.filtering)
-{
+if(Manual.vs.outlier.filtering){
   sce <- plotPCA(
     sce,
     size_by = "total_features_by_counts", 
@@ -313,8 +338,11 @@ pdf(pdfname, width=10, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
 #plotQC(reads, type = "highest-expression", n=20)
-fontsize <- theme(axis.text=element_text(size=16), axis.title=element_text(size=16))
-plotQC(sce, type = "highest-expression", n=20) + fontsize
+fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=16))
+plotHighestExprs(sce, n=50) + fontsize
+
+#fontsize <- theme(axis.text=element_text(size=16), axis.title=element_text(size=16))
+#plotHighestExprs(sce, n=30) + fontsize
 
 ave.counts <- calcAverage(sce)
 hist(log10(ave.counts), breaks=100, main="", col="grey80", 
@@ -338,7 +366,7 @@ save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_SCE.Rd
 
 ########################################################
 ########################################################
-# Section : chekc confonding factors, normalization and 
+# Section : normalization and confonding factors,
 # batch correction
 # codes original from Hemberg's course
 # https://hemberg-lab.github.io/scRNA.seq.course/cleaning-the-expression-matrix.html#data-visualization
@@ -347,6 +375,189 @@ save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_SCE.Rd
 # consider seurat for UMI counts, but here we are just working on the read counts
 ########################################################
 ########################################################
+##################################
+# scRNA-seq data normalization 
+# Many normalization have been proposed
+# Here we test main two methods: TMM from edgeR or from DESeq2
+# and the one from scran
+# the PCA and some other plots were used to assess the normalization
+##################################
+load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_SCE.Rdata'))
+sce.qc = sce;
+
+reducedDim(sce) <- NULL
+endog_genes <- !rowData(sce)$is_feature_control
+
+# specify the shapes for bulk control and early cells (supposed to be)
+Manully.Define.Shapes = FALSE
+if(Manully.Define.Shapes){
+  shapes = rep(1, ncol(sce))
+  shapes[which(sce$sampleInfo=="bulk.control")] = 3
+  shapes[which(sce$sampleInfo=="early")] = 2
+  shapes = data.frame(shapes)
+}
+
+pdfname = paste0(resDir, "/scRNAseq_filtered_normalization_", version.analysis, ".pdf")
+pdf(pdfname, width=10, height = 6)
+par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+
+#source("scRNAseq_functions.R")
+library(scRNA.seq.funcs)
+library(scater)
+library(scran)
+options(stringsAsFactors = FALSE)
+set.seed(1234567)
+
+assay(sce.qc, "logcounts_raw") <- log2(counts(sce) + 1)
+
+# raw log counts
+scater::plotPCA(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "logcounts_raw"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "seqInfos"
+) + ggtitle("PCA using log(raw counts)")
+
+plotRLE(
+  sce.qc[endog_genes, ],
+  exprs_values = "logcounts_raw", 
+  exprs_logged = TRUE,
+  colour_by = "seqInfos"
+)
+
+### cpm
+assay(sce.qc, "logcounts_cpm") <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
+
+scater::plotPCA(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "logcounts_cpm"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"
+) + ggtitle("PCA using cpm")
+
+plotRLE(
+  sce.qc[endog_genes, ],
+  exprs_values = "logcounts", 
+  exprs_logged = TRUE,
+  colour_by = "seqInfos"
+)
+
+## try downsample
+assay(sce.qc, "logcounts_downsample") <- log2(Down_Sample_Matrix(counts(sce.qc)) + 1)
+
+scater::plotPCA(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "logcounts"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"
+) + ggtitle("PCA using downsample")
+
+plotRLE(
+  sce.qc[endog_genes, ],
+  exprs_values = "logcounts",
+  exprs_logged = TRUE,
+  colour_by = "seqInfos"
+)
+
+## try DESeq2 normalization
+source('scRNAseq_functions.R')
+assay(sce.qc, "logcounts_DEseq2") <- log2(calc_sf(counts(sce.qc)))
+
+scater::plotPCA(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "logcounts_DEseq2"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"
+) + ggtitle("PCA using DESeq2")
+
+plotRLE(
+  sce.qc[endog_genes, ],
+  exprs_values = "logcounts", 
+  exprs_logged = TRUE,
+  colour_by = "seqInfos"
+)
+
+library(scran)
+options(stringsAsFactors = FALSE)
+set.seed(1234567)
+
+### raw counts in log scale
+#plotPCA(
+#  sce.qc[endog_genes, ],
+#  run_args = list(exprs_values = "logcounts_raw"), 
+#  colour_by = "sampleInfo",
+#  size_by = "total_features_by_counts"
+#  #shape_by = "sampleInfo"
+#) + ggtitle("PCA using logcounts_raw")
+
+## scran normalization (not working here, because negative scaling factor found)
+qclust <- quickCluster(sce.qc, min.size = 30)
+sce.qc <- computeSumFactors(sce.qc, sizes = 15, clusters = qclust)
+sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
+
+scater::plotPCA(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "logcounts"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"
+) + ggtitle("PCA using scran")
+
+plotRLE(
+  sce.qc[endog_genes, ],
+  exprs_values = "logcounts", 
+  exprs_logged = TRUE,
+  colour_by = "seqInfos"
+)
+
+sumury(sizeFactors(sce.qc))
+range(sizeFactors(sce.qc))
+
+plot(sce.qc$total_counts/1e6, sizeFactors(sce.qc), log="xy",
+     xlab="Library size (millions)", ylab="Size factor",
+     pch=16)
+legend("bottomright", col=c("black"), pch=16, cex=1.2, 
+       legend = "size factor from scran vs total library size")
+
+plotPCA(
+  sce.qc[endog_genes, ],
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"  
+) + ggtitle("scran normalization")
+
+param.perplexity = 10;
+plotTSNE(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "flowcell.lane"  
+) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity))
+
+if(any(sizeFactors(sce.qc)<0)){
+  cat("ERROR........")
+  cat("NEGATIVE size factors FOUND !!! \n" )
+  cat(sizeFactors(sce), "\n")
+}else{
+  plot(sizeFactors(sce.qc), sce.qc$total_counts/1e6, log="xy",
+       ylab="Library size (millions)", xlab="Size factor")
+  
+}
+
+dev.off()
+
+## save the normalized sce object
+sce = sce.qc;
+save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+
+#write.csv(logcounts(sce), file=paste0(tabDir, "scRNAseq_QC_filtered_normalized_readCounts.csv"), row.names=TRUE)
+
+
 Data.visulization.exploration = FALSE
 if(Data.visulization.exploration)
 {
@@ -431,118 +642,6 @@ if(Data.visulization.exploration)
 
 }
 
-##################################
-# scRNA-seq data normalization
-# here many normalization have been proposed
-# but here we are still using TMM from edgeR or from scran
-##################################
-load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_SCE.Rdata'))
-assay(sce, "logcounts_raw") <- log2(counts(sce) + 1)
-reducedDim(sce) <- NULL
-sce.qc = sce
-endog_genes <- !rowData(sce)$is_feature_control
-
-# specify the shapes for bulk control and early cells (supposed to be)
-Manully.Define.Shapes = FALSE
-if(Manully.Define.Shapes){
-  shapes = rep(1, ncol(sce))
-  shapes[which(sce$sampleInfo=="bulk.control")] = 3
-  shapes[which(sce$sampleInfo=="early")] = 2
-  shapes = data.frame(shapes)
-  
-}
-
-library(scran)
-options(stringsAsFactors = FALSE)
-set.seed(1234567)
-
-pdfname = paste0(resDir, "/scRNAseq_filtered_normalization_", version.analysis, ".pdf")
-pdf(pdfname, width=10, height = 6)
-par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-
-### raw counts in log scale
-#plotPCA(
-#  sce.qc[endog_genes, ],
-#  run_args = list(exprs_values = "logcounts_raw"), 
-#  colour_by = "sampleInfo",
-#  size_by = "total_features_by_counts"
-#  #shape_by = "sampleInfo"
-#) + ggtitle("PCA using logcounts_raw")
-
-### cpm
-logcounts(sce.qc) <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
-scater::plotPCA(
-  sce.qc[endog_genes, ],
-  run_args = list(exprs_values = "logcounts"), 
-  size_by = "total_counts",
-  #size_by = "total_features_by_counts",
-  colour_by = "flowcell.lane"
-) + ggtitle("PCA using cpm")
-
-try.TMM = FALSE
-if(try.TMM){
-  ### TMM
-  sce.qc <- normaliseExprs(
-    sce.qc,
-    method = "TMM",
-    feature_set = endog_genes,
-    return_log = TRUE,
-    return_norm_as_exprs = TRUE
-  )
-  plotPCA(
-    sce.qc[endog_genes, ],
-    colour_by = "total_counts",
-    size_by = "total_features_by_counts"
-  )
-}
-
-## scran normalization (not working here, because negative scaling factor found)
-qclust <- quickCluster(sce.qc, min.size = 30)
-sce.qc <- computeSumFactors(sce.qc, sizes = 15, clusters = qclust)
-sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
-
-sumury(sizeFactors(sce.qc))
-range(sizeFactors(sce.qc))
-
-plot(sce.qc$total_counts/1e6, sizeFactors(sce.qc), log="xy",
-     xlab="Library size (millions)", ylab="Size factor",
-      pch=16)
-legend("bottomright", col=c("black"), pch=16, cex=1.2, 
-       legend = "size factor from scran vs total library size")
-
-plotPCA(
-  sce.qc[endog_genes, ],
-  size_by = "total_counts",
-  #size_by = "total_features_by_counts",
-  colour_by = "flowcell.lane"  
-) + ggtitle("scran normalization")
-
-param.perplexity = 10;
-plotTSNE(
-  sce.qc[endog_genes, ],
-  run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
-  size_by = "total_counts",
-  #size_by = "total_features_by_counts",
-  colour_by = "flowcell.lane"  
-) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity))
-
-if(any(sizeFactors(sce.qc)<0)){
-  cat("ERROR........")
-  cat("NEGATIVE size factors FOUND !!! \n" )
-  cat(sizeFactors(sce), "\n")
-}else{
-  plot(sizeFactors(sce.qc), sce.qc$total_counts/1e6, log="xy",
-       ylab="Library size (millions)", xlab="Size factor")
-  
-}
-
-dev.off()
-
-## save the normalized sce object
-sce = sce.qc;
-save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
-
-#write.csv(logcounts(sce), file=paste0(tabDir, "scRNAseq_QC_filtered_normalized_readCounts.csv"), row.names=TRUE)
 
 ########################################################
 ########################################################

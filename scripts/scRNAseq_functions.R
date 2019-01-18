@@ -47,22 +47,30 @@ process.countTable = function(all, design, additional.filter = NULL)
 }
 
 
-## common functions for normalizations from Hemberg lab
+##########################################
+# several common functions for normalizations 
+# from Hemberg lab
+# hemberg-lab.github.io/scRNA.seq.course/cleaning-the-expression-matrix.html#normalization-theory
+##########################################
 calc_cpm <- function (expr_mat, spikes = NULL) 
 {
   norm_factor <- colSums(expr_mat[-spikes, ])
   return(t(t(expr_mat)/norm_factor)) * 10^6
 }
+
 calc_sf <- function (expr_mat, spikes = NULL) 
 {
-  geomeans <- exp(rowMeans(log(expr_mat[-spikes, ])))
+  
+  geomeans <- exp(rowMeans(log(expr_mat)))
+  
   SF <- function(cnts) {
-    median((cnts/geomeans)[(is.finite(geomeans) & geomeans > 
-                              0)])
+    median((cnts/geomeans)[(is.finite(geomeans) & geomeans > 0)])
   }
-  norm_factor <- apply(expr_mat[-spikes, ], 2, SF)
+  
+  norm_factor <- apply(expr_mat, 2, SF)
   return(t(t(expr_mat)/norm_factor))
 }
+
 calc_uq <- function (expr_mat, spikes = NULL) 
 {
   UQ <- function(x) {
@@ -72,21 +80,20 @@ calc_uq <- function (expr_mat, spikes = NULL)
   norm_factor <- uq/median(uq)
   return(t(t(expr_mat)/norm_factor))
 }
+
 calc_cell_RLE <-  function (expr_mat, spikes = NULL) 
 {
   RLE_gene <- function(x) {
     if (median(unlist(x)) > 0) {
       log((x + 1)/(median(unlist(x)) + 1))/log(2)
-    }
-    else {
-      rep(NA, times = length(x))
+    } else {
+        rep(NA, times = length(x))
     }
   }
   if (!is.null(spikes)) {
     RLE_matrix <- t(apply(expr_mat[-spikes, ], 1, RLE_gene))
-  }
-  else {
-    RLE_matrix <- t(apply(expr_mat, 1, RLE_gene))
+  } else {
+      RLE_matrix <- t(apply(expr_mat, 1, RLE_gene))
   }
   cell_RLE <- apply(RLE_matrix, 2, median, na.rm = T)
   return(cell_RLE)
