@@ -328,12 +328,18 @@ sce = sce[, sce$use]
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_filtered_SCE.Rdata'))
 
 ##########################################
+##########################################
 # remove the cell cycle confounder 
+# we need to train the cells to identify the cell cycle phase
+# this could be more complicated than expected
+##########################################
 ##########################################
 set.seed(100)
 library(scran)
+
 mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", 
                                 package="scran"))
+
 assignments <- cyclone(sce, mm.pairs, gene.names=rowData(sce)$ENSEMBL)
 plot(assignments$score$G1, assignments$score$G2M, 
      xlab="G1 score", ylab="G2/M score", pch=16)
@@ -510,12 +516,38 @@ for(method in Methods.Normalization)
 
 
 ## select normalization method and save the normalized sce object
-qclust <- quickCluster(sce.qc, min.size = 30)
-sce.qc <- computeSumFactors(sce.qc, sizes = 15, clusters = qclust)
-sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
+set.seed(1000)    
+#qclust <- quickCluster(sce.qc, min.size = 30)
+clusters <- quickCluster(sce, method="igraph", min.mean=0.1)
+table(clusters)
 
-sce = sce.qc;
+sce <- computeSumFactors(sce, min.mean=0.1, clusters = clusters)
+sce <- normalize(sce, exprs_values = "counts", return_log = TRUE)
+
+#sce = sce.qc;
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+
+
+########################################################
+########################################################
+# Section : dealing with batch confouner
+# first thing to try is the MNN method from scran pacakge after contacting with the first 
+# author, Laleh Haghverdi
+# 
+########################################################
+########################################################
+load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+
+library(scRNA.seq.funcs)
+#library(RUVSeq)
+library(scater)
+library(SingleCellExperiment)
+library(scran)
+#library(kBET)
+#library(sva) # Combat
+#library(edgeR)
+set.seed(1234567)
+options(stringsAsFactors = FALSE)
 
 
 
