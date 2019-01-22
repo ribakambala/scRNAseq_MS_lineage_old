@@ -551,24 +551,6 @@ options(stringsAsFactors = FALSE)
 
 sce.qc = sce
 
-scater::plotPCA(
-  sce.qc,
-  run_args = list(exprs_values = "logcounts"), 
-  size_by = "total_counts",
-  #size_by = "total_features_by_counts",
-  colour_by = "seqInfos"
-) + ggtitle(paste0("PCA -- ", main))
-
-param.perplexity = 15;
-plotTSNE(
-  sce.qc,
-  run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
-  size_by = "total_counts",
-  #size_by = "total_features_by_counts",
-  colour_by = "seqInfos"  
-) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "--", main))
-
-
 ##########################################
 # here to prepare the inputs for MNN in scran 
 # for each batch we do feature selection (HVGs) and 
@@ -586,49 +568,155 @@ head(dec.sorted)
 gene.chosen <- rownames(dec.sorted)[which(dec.sorted$FDR <0.05)]
 length(gene.chosen)
 
-rescaled <- multiBatchNorm(sce.qc[ , which(sce.qc$request == "R6875")], 
-                           sce.qc[ , which(sce.qc$request == "R7116")],
-                           sce.qc[ , which(sce.qc$request == "R7130")])
-rescaled.R6875 <- rescaled[[1]]
-rescaled.R7116 <- rescaled[[2]]
-rescaled.R7130 <- rescaled[[3]]
+#rescaled <- multiBatchNorm(sce.qc[ , which(sce.qc$request == "R6875")], 
+#                           sce.qc[ , which(sce.qc$request == "R7116")],
+#                           sce.qc[ , which(sce.qc$request == "R7130")])
+#rescaled.R6875 <- rescaled[[1]]
+#rescaled.R7116 <- rescaled[[2]]
+#rescaled.R7130 <- rescaled[[3]]
+set.seed(100)
+R6879 = logcounts(sce.qc[ , which(sce.qc$request == "R6875")])
+R7116 = logcounts(sce.qc[ , which(sce.qc$request == "R7116")])
+R7130 = logcounts(sce.qc[ , which(sce.qc$request == "R7130")])
 
-set.seed(100) 
-original <- list(
-  R6879 = logcounts(rescaled.R6875)[gene.chosen,],
-  R7116 = logcounts(rescaled.R7116)[gene.chosen,],
-  R7130 = logcounts(rescaled.R7130[gene.chosen, ])
-)
+mnn.out = mnnCorrect(R6879, R7116, R7130, k = 20, sigma = 0.1, cos.norm.in = TRUE, 
+                     svd.dim = 2, subset.row = gene.chosen,  pc.approx = TRUE, BPPARAM=MulticoreParam(4))
 
-# Slightly convoluted call to avoid re-writing code later.
-# Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
-mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, approximate=TRUE)))
-dim(mnn.out$corrected)
+head(mnn.out$pairs[[2]])
 
-mnn.out$batch
-mnn.out$pairs
+## check the pairs of cells used between batches
+for(n in 2:length(mnn.out$pairs))
+{
+  #n = 3
+  paires = data.frame(mnn.out$pairs[[n]])
+  
+  cat("cell in the batch", n, ":  ",
+      "total pairs --", nrow(paires), ",",  
+      "paired cell in batch", n-1, "-- ", length(unique(paires[which(paires[,3]==(n-1)), 2])), ",", 
+      "paired cell in batch", n+1, "-- ", length(unique(paires[which(paires[,3]==(n+1)), 2])), "\n"
+  )
+  
+}
 
-omat <- do.call(cbind, original)
-sce <- SingleCellExperiment(list(logcounts=omat))
-reducedDim(sce, "MNN") <- mnn.out$corrected
-sce$Batch <- as.character(mnn.out$batch)
-sce
 
-reducedDim(sce, "MNN") <- mnn.out$corrected
-sce$Batch <- as.character(mnn.out$batch)
-sce
+res1 <- mnn.out$corrected[[1]]
+res2 <- mnn.out$corrected[[2]]
+res3 <- mnn.out$corrected[[3]]
+
+dimnames(res1) <- dimnames(R6879)
+dimnames(res2) <- dimnames(R7116)
+dimnames(res3) <- dimnames(R7130)
+res = cbind(res1, res2, res3)
+
+assay(sce.qc, "mnn") <- res
+
+sce = sce.qc
+
+save(sce, mnn.out, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
+
+
+pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_", method, ".pdf")
+pdf(pdfname, width=18, height = 8)
+par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+
+od = scater::plotPCA(
+  sce.qc,
+  run_args = list(exprs_values = "logcounts"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "request"
+) + ggtitle(paste0("PCA -- origine "))
+
+cd = scater::plotPCA(
+  sce.qc,
+  run_args = list(exprs_values = "mnn"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "request"
+) + ggtitle(paste0("PCA -- corrected by mnn"))
+
+multiplot(od, cd, cols=2)
+
+param.perplexity = 20;
+set.seed(100)
+od = plotTSNE(
+  sce.qc,
+  run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "request"  
+) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "-- origin"))
+set.seed(100)
+cd = plotTSNE(
+  sce.qc,
+  run_args = list(exprs_values = "mnn", perplexity = param.perplexity), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "request"  
+) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "-- corrected"))
+
+multiplot(od, cd, cols=2)
+set.seed(100)
+od = plotUMAP(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "logcounts"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "request"
+) + ggtitle(paste0("UMAP -- corrected"))
 
 set.seed(100)
-# Using irlba to set up the t-SNE, for speed.
-osce <- runPCA(sce, ntop=Inf, method="irlba")
-osce <- runTSNE(osce, use_dimred="PCA")
-ot <- plotTSNE(osce, colour_by="Batch") + ggtitle("Original")
+cd =  plotUMAP(
+  sce.qc[endog_genes, ],
+  run_args = list(exprs_values = "mnn"), 
+  size_by = "total_counts",
+  #size_by = "total_features_by_counts",
+  colour_by = "request"
+) + ggtitle(paste0("UMAP -- corrected"))
 
-set.seed(100)
-csce <- runTSNE(sce, use_dimred="MNN")
-ct <- plotTSNE(csce, colour_by="Batch") + ggtitle("Corrected")
+multiplot(od, cd, cols=2)
 
-multiplot(ot, ct, cols=2)
+dev.off()
+
+Test.fastMNN = FALSE
+if(Test.fastMNN){
+  # Slightly convoluted call to avoid re-writing code later.
+  # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
+  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, approximate=TRUE)))
+  dim(mnn.out$corrected)
+  
+  mnn.out$batch
+  mnn.out$pairs
+  
+  omat <- do.call(cbind, original)
+  sce <- SingleCellExperiment(list(logcounts=omat))
+  reducedDim(sce, "MNN") <- mnn.out$corrected
+  sce$Batch <- as.character(mnn.out$batch)
+  sce
+  
+  reducedDim(sce, "MNN") <- mnn.out$corrected
+  sce$Batch <- as.character(mnn.out$batch)
+  sce
+  
+  set.seed(100)
+  # Using irlba to set up the t-SNE, for speed.
+  osce <- runPCA(sce, ntop=Inf, method="irlba")
+  osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
+  ot <- plotTSNE(osce, colour_by="Batch") + ggtitle("Original")
+  
+  set.seed(100)
+  csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
+  ct <- plotTSNE(csce, colour_by="Batch") + ggtitle("Corrected")
+  
+  csce <- runUMAP(sce, use_dimred="MNN")
+  plotUMAP(csce, colour_by = "Batch")
+  
+  multiplot(ot, ct, cols=2)
+  
+}
+
+dev.off()
+
 ########################################################
 ########################################################
 # Section : clustering
