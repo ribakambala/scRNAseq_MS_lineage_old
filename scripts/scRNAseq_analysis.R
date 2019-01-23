@@ -221,38 +221,31 @@ head(colnames(colData(sce)), 20)
 pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting.pdf")
 pdf(pdfname, width=10, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-#coldata.sce = data.frame(colData(sce))
-#rRNA.contamination = coldata.sce$rRNA/coldata.sce$Total
-plotColData(sce, y="log10_total_counts", x="seqInfos")
-plotColData(sce, y="total_features_by_counts", x="seqInfos")
-plotColData(sce, y="pct_counts_Ribo", x="seqInfos")
-plotColData(sce, y="pct_counts_Mt", x="seqInfos")
+
+# some general statistics for each request and lane
+plotColData(sce, y = "log10_Total", x = "seqInfos") + ggtitle("total nb of reads")
+plotColData(sce, y="uniquely_mapped_percent", x="seqInfos") + ggtitle("% of uniquely mapped ")
+plotColData(sce, y="percent_assigned", x="seqInfos") + ggtitle("% of assigned")
+plotColData(sce, y="pct_counts_Ribo", x="seqInfos") + ggtitle("% of rRNA contamination")
+plotColData(sce, y="pct_counts_Mt", x="seqInfos") + ggtitle("% of Mt")
+
+plotColData(sce, y="log10_total_counts", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
+plotColData(sce, y="total_features_by_counts", x="seqInfos") + ggtitle("total nb of genes")
 
 plotColData(sce, 
             x = "log10_Total",
             y = "uniquely_mapped_percent",
             #colour_by = "uniquely_mapped_percent",
             colour_by = "seqInfos",
-            size_by = "percent_rRNA"
+            size_by = "pct_counts_Ribo"
 )
 
-plotColData(sce, 
+plotColData(sce,
             x = "log10_total_counts",
             y = "log10_total_features_by_counts",
             #colour_by = "percent_mapped",
             colour_by = "seqInfos",
-            size_by = "uniquely_mapped_percent"
-) + scale_x_continuous(limits=c(4, 7)) +
-  scale_y_continuous(limits = c(2.5, 4.1)) +
-  geom_hline(yintercept=log10(c(500, 1000, 5000)) , linetype="dashed", color = "darkgray", size=0.5) +
-  geom_vline(xintercept = c(4:6), linetype="dotted", color = "black", size=0.5)
-
-plotColData(sce, 
-            x = "log10_total_counts",
-            y = "log10_total_features_by_counts",
-            #colour_by = "percent_mapped",
-            colour_by = "seqInfos",
-            size_by = "pct_counts_Ribo"
+            size_by = "pct_counts_Mt"
 ) + scale_x_continuous(limits=c(4, 7)) +
   scale_y_continuous(limits = c(2.5, 4.1)) +
   geom_hline(yintercept=log10(c(500, 1000, 5000)) , linetype="dashed", color = "darkgray", size=0.5) +
@@ -607,7 +600,7 @@ sce = sce.qc
 save(sce, mnn.out, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
 
 
-pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_", method, ".pdf")
+pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection.pdf")
 pdf(pdfname, width=18, height = 8)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
