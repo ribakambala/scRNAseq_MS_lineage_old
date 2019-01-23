@@ -217,7 +217,7 @@ head(colnames(colData(sce)))
 ####################
 ## filter cells with low quality 
 ####################
-pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting_", version.analysis, ".pdf")
+pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting.pdf")
 pdf(pdfname, width=10, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 #coldata.sce = data.frame(colData(sce))
@@ -595,9 +595,7 @@ for(n in 2:length(mnn.out$pairs))
       "paired cell in batch", n-1, "-- ", length(unique(paires[which(paires[,3]==(n-1)), 2])), ",", 
       "paired cell in batch", n+1, "-- ", length(unique(paires[which(paires[,3]==(n+1)), 2])), "\n"
   )
-  
 }
-
 
 res1 <- mnn.out$corrected[[1]]
 res2 <- mnn.out$corrected[[2]]
