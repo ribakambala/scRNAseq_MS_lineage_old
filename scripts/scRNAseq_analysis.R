@@ -212,7 +212,8 @@ summary(is.mito)
 summary(is.ribo)
 
 sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito, Ribo=is.ribo))
-head(colnames(colData(sce)))
+
+head(colnames(colData(sce)), 20)
 
 ####################
 ## filter cells with low quality 
@@ -222,6 +223,11 @@ pdf(pdfname, width=10, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 #coldata.sce = data.frame(colData(sce))
 #rRNA.contamination = coldata.sce$rRNA/coldata.sce$Total
+plotColData(sce, y="log10_total_counts", x="seqInfos")
+plotColData(sce, y="total_features_by_counts", x="seqInfos")
+plotColData(sce, y="pct_counts_Ribo", x="seqInfos")
+plotColData(sce, y="pct_counts_Mt", x="seqInfos")
+
 plotColData(sce, 
             x = "log10_Total",
             y = "uniquely_mapped_percent",
@@ -229,7 +235,6 @@ plotColData(sce,
             colour_by = "seqInfos",
             size_by = "percent_rRNA"
 )
-
 
 plotColData(sce, 
             x = "log10_total_counts",
@@ -253,21 +258,10 @@ plotColData(sce,
   geom_hline(yintercept=log10(c(500, 1000, 5000)) , linetype="dashed", color = "darkgray", size=0.5) +
   geom_vline(xintercept = c(4:6), linetype="dotted", color = "black", size=0.5)
 
-plotColData(sce, y="log10_total_counts", x="seqInfos")
-plotColData(sce, y="total_features_by_counts", x="seqInfos")
-plotColData(sce, y="pct_counts_Ribo", x="seqInfos")
-plotColData(sce, y="pct_counts_Mt", x="seqInfos")
-
-
-#par(mfrow=c(1, 1))
-#plot(sce$total_counts, sce$total_features_by_counts, xlab="Library size", ylab='Nb of expressed genes', log='xy')
-#abline(v=c(10^4, 10^5, 10^6), col='red', lwd=2.0)
-#abline(h=c(100, 200, 1000, 2000), col='red', lwd=2.0)
-
-
 dev.off()
 
 ##########################################
+## filter cells with low quality 
 # here we are using the 50,000 for library size and 100 expressed genes as thresholds
 ##########################################
 threshod.total.counts.per.cell = 10^5
@@ -283,7 +277,7 @@ table(filter_by_expr_features)
 filter_by_MT = sce$pct_counts_Mt < 7.5
 table(filter_by_MT)
 
-sce$use <- ( 
+sce$use <- (
     filter_by_expr_features & # sufficient features (genes)
     filter_by_total_counts & # sufficient molecules counted
     # filter_by_ERCC & # sufficient endogenous RNA
