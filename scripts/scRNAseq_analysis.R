@@ -551,7 +551,7 @@ sce.qc = sce
 # here we just use the scran trandVar()
 # further test to follow for other methods
 # (https://academic.oup.com/bib/advance-article/doi/10.1093/bib/bby011/4898116)
-# 
+# But many of them, e.g. BASics, Brennecke works better with spike-in 
 ##########################################
 #block <- paste0(sce.gse81076$Plate, "_", sce.gse81076$Donor)
 #fit <- trendVar(sce.gse81076, block=block, parametric=TRUE) 
@@ -566,14 +566,73 @@ curve(fit$trend(x), col="dodgerblue", add=TRUE)
 
 dec.sorted <- dec[order(dec$bio, decreasing=TRUE),]
 head(dec.sorted)
-gene.chosen <- rownames(dec.sorted)[which(dec.sorted$FDR <0.05)]
+#length(which(dec.sorted$bio>0))
+
+# here HVGs selected with FDR<0.01
+gene.chosen <- rownames(dec.sorted)[which(dec.sorted$FDR <0.01)]
 length(gene.chosen)
 
 ##########################################
 # Here we are going to run both mnnCorrect() and fastMNN() 
 ##########################################
-Test.fastMNN = FALSE
-if(!Test.fastMNN){
+Use.fastMNN = TRUE
+if(Use.fastMNN){
+  rescaled <- multiBatchNorm(sce.qc[ , which(sce.qc$request == "R6875")], 
+                             sce.qc[ , which(sce.qc$request == "R7116")],
+                             sce.qc[ , which(sce.qc$request == "R7130")])
+  rescaled.R6875 <- rescaled[[1]]
+  rescaled.R7116 <- rescaled[[2]]
+  rescaled.R7130 <- rescaled[[3]]
+  
+  set.seed(100) 
+  original <- list(
+    R6875=logcounts(rescaled.R6875)[gene.chosen,],
+    R7116=logcounts(rescaled.R7116)[gene.chosen,],
+    R7130=logcounts(rescaled.R7130)[gene.chosen,]
+  )
+  
+  # Slightly convoluted call to avoid re-writing code later.
+  # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
+  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, approximate=TRUE)))
+  dim(mnn.out$corrected)
+  
+  mnn.out$batch
+  mnn.out$pairs
+  
+  omat <- do.call(cbind, original)
+  sce <- SingleCellExperiment(list(logcounts=omat))
+  reducedDim(sce, "MNN") <- mnn.out$corrected
+  sce$Batch <- as.character(mnn.out$batch)
+  sce
+  
+  reducedDim(sce, "MNN") <- mnn.out$corrected
+  sce$Batch <- as.character(mnn.out$batch)
+  sce
+  
+  set.seed(100)
+  # Using irlba to set up the t-SNE, for speed.
+  osce <- runPCA(sce, ntop=Inf, method="irlba")
+  osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
+  ot <- plotTSNE(osce, colour_by="Batch") + ggtitle("Original")
+  
+  set.seed(100)
+  csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
+  ct <- plotTSNE(csce, colour_by="Batch") + ggtitle("Corrected")
+  
+  #csce <- runUMAP(sce, use_dimred="MNN")
+  #plotUMAP(csce, colour_by = "Batch")
+  multiplot(ot, ct, cols=2)
+  
+  snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
+  clusters <- igraph::cluster_walktrap(snn.gr)
+  table(clusters$membership, sce$Batch)
+  
+  csce$Cluster <- factor(clusters$membership)
+  plotTSNE(csce, colour_by="Cluster")
+}
+
+Use.mnnCorrect = TRUE
+if(Use.mnnCorrect){
   set.seed(100)
   R6879 = logcounts(sce.qc[ , which(sce.qc$request == "R6875")])
   R7116 = logcounts(sce.qc[ , which(sce.qc$request == "R7116")])
@@ -676,60 +735,6 @@ if(!Test.fastMNN){
   
   dev.off()
 
-}else{
-  rescaled <- multiBatchNorm(sce.qc[ , which(sce.qc$request == "R6875")], 
-                             sce.qc[ , which(sce.qc$request == "R7116")],
-                             sce.qc[ , which(sce.qc$request == "R7130")])
-  rescaled.R6875 <- rescaled[[1]]
-  rescaled.R7116 <- rescaled[[2]]
-  rescaled.R7130 <- rescaled[[3]]
-  
-  set.seed(100) 
-  original <- list(
-    R6875=logcounts(rescaled.R6875)[gene.chosen,],
-    R7116=logcounts(rescaled.R7116)[gene.chosen,],
-    R7130=logcounts(rescaled.R7130)[gene.chosen,]
-  )
-  
-  # Slightly convoluted call to avoid re-writing code later.
-  # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
-  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, approximate=TRUE)))
-  dim(mnn.out$corrected)
-  
-  mnn.out$batch
-  mnn.out$pairs
-  
-  omat <- do.call(cbind, original)
-  sce <- SingleCellExperiment(list(logcounts=omat))
-  reducedDim(sce, "MNN") <- mnn.out$corrected
-  sce$Batch <- as.character(mnn.out$batch)
-  sce
-  
-  reducedDim(sce, "MNN") <- mnn.out$corrected
-  sce$Batch <- as.character(mnn.out$batch)
-  sce
-  
-  set.seed(100)
-  # Using irlba to set up the t-SNE, for speed.
-  osce <- runPCA(sce, ntop=Inf, method="irlba")
-  osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
-  ot <- plotTSNE(osce, colour_by="Batch") + ggtitle("Original")
-  
-  set.seed(100)
-  csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
-  ct <- plotTSNE(csce, colour_by="Batch") + ggtitle("Corrected")
-  
-  #csce <- runUMAP(sce, use_dimred="MNN")
-  #plotUMAP(csce, colour_by = "Batch")
-  multiplot(ot, ct, cols=2)
-  
-  snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
-  clusters <- igraph::cluster_walktrap(snn.gr)
-  table(clusters$membership, sce$Batch)
-  
-  csce$Cluster <- factor(clusters$membership)
-  plotTSNE(csce, colour_by="Cluster")
-  
 }
 
 dev.off()
