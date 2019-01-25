@@ -575,118 +575,157 @@ length(gene.chosen)
 ##########################################
 # Here we are going to run both mnnCorrect() and fastMNN() 
 ##########################################
-Use.fastMNN = TRUE
-if(Use.fastMNN){
+rescaling.for.multBatch = FALSE
+if(rescaling.for.multBatch){
   rescaled <- multiBatchNorm(sce.qc[ , which(sce.qc$request == "R6875")], 
                              sce.qc[ , which(sce.qc$request == "R7116")],
                              sce.qc[ , which(sce.qc$request == "R7130")])
   rescaled.R6875 <- rescaled[[1]]
   rescaled.R7116 <- rescaled[[2]]
-  rescaled.R7130 <- rescaled[[3]]
+  rescaled.R7130 <- rescaled[[3]] 
   
+  R6875=logcounts(rescaled.R6875)
+  R7116=logcounts(rescaled.R7116)
+  R7130=logcounts(rescaled.R7130)
+}else{
+  R6879 = logcounts(sce.qc[ , which(sce.qc$request == "R6875")])
+  R7116 = logcounts(sce.qc[ , which(sce.qc$request == "R7116")])
+  R7130 = logcounts(sce.qc[ , which(sce.qc$request == "R7130")])
+}
+
+Use.fastMNN = TRUE
+if(Use.fastMNN){
   set.seed(100) 
   original <- list(
-    R6875=logcounts(rescaled.R6875)[gene.chosen,],
-    R7116=logcounts(rescaled.R7116)[gene.chosen,],
-    R7130=logcounts(rescaled.R7130)[gene.chosen,]
+    R6879 = R6879,
+    R7116 = R7116,
+    R7130 = R7130
   )
   
   # Slightly convoluted call to avoid re-writing code later.
   # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
-  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, approximate=TRUE)))
+  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, subset.row = gene.chosen, auto.order=c(3,2,1),
+                                               approximate=TRUE)))
   dim(mnn.out$corrected)
-  
   mnn.out$batch
   mnn.out$pairs
   
-  omat <- do.call(cbind, original)
-  sce <- SingleCellExperiment(list(logcounts=omat))
+  #omat <- do.call(cbind, original)
+  #sce.qc <- SingleCellExperiment(list(logcounts=omat))
   reducedDim(sce, "MNN") <- mnn.out$corrected
   sce$Batch <- as.character(mnn.out$batch)
   sce
   
-  reducedDim(sce, "MNN") <- mnn.out$corrected
-  sce$Batch <- as.character(mnn.out$batch)
-  sce
+  set.seed(1000)
+  with.var <- do.call(fastMNN, c(original,
+                                 list(k=20, cos.norm = TRUE, d=50, subset.row = gene.chosen, auto.order=c(3,2,1), approximate=TRUE,
+                                      compute.variances=TRUE)))
+  with.var$lost.var
   
+  #save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrect_fastMNN.Rdata'))
+  
+  pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_inLowDimensions.pdf")
+  pdf(pdfname, width=18, height = 8)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
+  # check the effect of correction by fastMNN
   set.seed(100)
   # Using irlba to set up the t-SNE, for speed.
-  osce <- runPCA(sce, ntop=Inf, method="irlba")
+  osce <- runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts", feature_set = gene.chosen)
+  #plotPCA(osce, colour_by="Batch") + ggtitle("Original")
   osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
   ot <- plotTSNE(osce, colour_by="Batch") + ggtitle("Original")
-  
   set.seed(100)
   csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
   ct <- plotTSNE(csce, colour_by="Batch") + ggtitle("Corrected")
-  
-  #csce <- runUMAP(sce, use_dimred="MNN")
-  #plotUMAP(csce, colour_by = "Batch")
   multiplot(ot, ct, cols=2)
   
-  snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
-  clusters <- igraph::cluster_walktrap(snn.gr)
-  table(clusters$membership, sce$Batch)
+  osce <- runUMAP(osce, use_dimred="PCA", perplexity = 20)
+  ot <- plotUMAP(osce, colour_by="Batch") + ggtitle("Original")
+  set.seed(100)
+  csce <- runUMAP(sce, use_dimred="MNN", perplexity = 20)
+  ct <- plotUMAP(csce, colour_by="Batch") + ggtitle("Corrected")
+  multiplot(ot, ct, cols=2)
   
-  csce$Cluster <- factor(clusters$membership)
-  plotTSNE(csce, colour_by="Cluster")
+  dev.off()
+  
 }
 
 Use.mnnCorrect = TRUE
 if(Use.mnnCorrect){
   set.seed(100)
-  R6879 = logcounts(sce.qc[ , which(sce.qc$request == "R6875")])
-  R7116 = logcounts(sce.qc[ , which(sce.qc$request == "R7116")])
-  R7130 = logcounts(sce.qc[ , which(sce.qc$request == "R7130")])
+  require(BiocParallel)
+  require(stats)
+  bpp <- MulticoreParam(5)
+  bpp
   
-  mnn.out = mnnCorrect(R6879, R7116, R7130, k = 20, sigma = 0.1, cos.norm.in = TRUE, 
-                       svd.dim = 2, subset.row = gene.chosen,  pc.approx = TRUE, BPPARAM=MulticoreParam(4))
+  mnn.out2 = mnnCorrect(R6879, R7116, R7130, k = 20, sigma = 1, cos.norm.in = TRUE, cos.norm.out = TRUE, order = c(3, 2, 1), 
+                       svd.dim = 3, subset.row = gene.chosen,  pc.approx = TRUE, BPPARAM=bpp)
   
-  head(mnn.out$pairs[[2]])
+  head(mnn.out2$pairs[[2]])
   
   ## check the pairs of cells used between batches
-  for(n in 2:length(mnn.out$pairs))
-  {
-    #n = 3
-    paires = data.frame(mnn.out$pairs[[n]])
-    
-    cat("cell in the batch", n, ":  ",
-        "total pairs --", nrow(paires), ",",  
-        "paired cell in batch", n-1, "-- ", length(unique(paires[which(paires[,3]==(n-1)), 2])), ",", 
-        "paired cell in batch", n+1, "-- ", length(unique(paires[which(paires[,3]==(n+1)), 2])), "\n"
-    )
+  Check.SNN.pairs = FALSE
+  if(Check.SNN.pairs){
+    for(n in 2:length(mnn.out$pairs))
+    {
+      #n = 3
+      paires = data.frame(mnn.out2$pairs[[n]])
+      
+      cat("cell in the batch", n, ":  ",
+          "total pairs --", nrow(paires), ",",  
+          "paired cell in batch", n-1, "-- ", length(unique(paires[which(paires[,3]==(n-1)), 2])), ",", 
+          "paired cell in batch", n+1, "-- ", length(unique(paires[which(paires[,3]==(n+1)), 2])), "\n"
+      )
+    }
   }
   
-  res1 <- mnn.out$corrected[[1]]
-  res2 <- mnn.out$corrected[[2]]
-  res3 <- mnn.out$corrected[[3]]
+  res1 <- mnn.out2$corrected[[1]]
+  res2 <- mnn.out2$corrected[[2]]
+  res3 <- mnn.out2$corrected[[3]]
   
   dimnames(res1) <- dimnames(R6879)
   dimnames(res2) <- dimnames(R7116)
   dimnames(res3) <- dimnames(R7130)
   res = cbind(res1, res2, res3)
   
-  assay(sce.qc, "corrected.mnn") <- res
+  assay(sce, "corrected") <- res
   
-  sce = sce.qc
+  #sce = sce.qc
   
-  save(sce, mnn.out, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
+  save(sce, mnn.out, mnn.out2, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
   
+  ##########################################
+  # double check the relatinship between fastMNN and mnnCorrect 
+  ##########################################
+  osce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts", feature_set = gene.chosen)
+  csce <- runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "corrected", feature_set = gene.chosen)
   
-  pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection.pdf")
+  xx = as.data.frame(reducedDim(csce, "MNN"));
+  yy = as.data.frame(reducedDim(csce, "PCA"))
+  
+  head(xx[, c(1:10)])
+  head(yy[, c(1:10)])
+  
+  par(mfrow = c(1, 2))
+  plot(xx[, c(1:2)], xlab = 'PC1', ylab = "PC2", main = "lowDim output from fastMNN")
+  plot(yy[, c(1:2)], xlab = 'PC1', ylab = "PC2", main = "PCA from mnnCorret output")
+  
+  pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_fastMNNlowDim_vs_mnnCorrectOutput.pdf")
   pdf(pdfname, width=18, height = 8)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
   od = scater::plotPCA(
-    sce.qc,
+    osce,
     run_args = list(exprs_values = "logcounts"), 
     size_by = "total_counts",
     #size_by = "total_features_by_counts",
-    colour_by = "request"
+    colour_by = "Batch"
   ) + ggtitle(paste0("PCA -- origine "))
   
   cd = scater::plotPCA(
-    sce.qc,
-    run_args = list(exprs_values = "mnn"), 
+    csce,
+    run_args = list(exprs_values = "corrected"),
     size_by = "total_counts",
     #size_by = "total_features_by_counts",
     colour_by = "request"
@@ -694,63 +733,22 @@ if(Use.mnnCorrect){
   
   multiplot(od, cd, cols=2)
   
-  param.perplexity = 20;
-  set.seed(100)
-  od = plotTSNE(
-    sce.qc,
-    run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "request"  
-  ) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "-- origin"))
-  set.seed(100)
-  cd = plotTSNE(
-    sce.qc,
-    run_args = list(exprs_values = "mnn", perplexity = param.perplexity), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "request"  
-  ) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "-- corrected"))
-  
-  multiplot(od, cd, cols=2)
-  set.seed(100)
-  od = plotUMAP(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "logcounts"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "request"
-  ) + ggtitle(paste0("UMAP -- corrected"))
-  
-  set.seed(100)
-  cd =  plotUMAP(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "mnn"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "request"
-  ) + ggtitle(paste0("UMAP -- corrected"))
-  
-  multiplot(od, cd, cols=2)
-  
   dev.off()
 
 }
 
-dev.off()
 
 ########################################################
 ########################################################
-# Section : clustering
-# feature selection and dimension reduction and clustering, gene markers 
-# there are many options for HGV, dimension reduction and clustering
-# there are also many choices to combine them
-# Here, to start with something simple, I test three popular workflow from Aaron, hemberg and seurat
+# Section : clustering and DE analysis or gene markers discovery
+# feature selection and dimension reduction was done already in the batch correction part
+# So we start with the PCs from fastMNN in scran, with which we define distance for clustering
+# 1) different clustering methods will be tested  
+# 2) special design matrix will be used for DE analysis 
+# http://bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/de.html#2_blocking_on_uninteresting_factors_of_variation
 ########################################################
 ########################################################
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
-#sce.bc = sce
-#logcounts(sce.bc) = assay(sce, 'mnn')
 
 library(scater)
 library(scran)
@@ -759,18 +757,22 @@ library(matrixStats)
 #library(M3Drop)
 library(RColorBrewer)
 library(SingleCellExperiment)
-set.seed(1)
+set.seed(100)
 
-#load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
 ##########################################
 # test Aaron's clustering workflow
-# original code found in 
 # https://master.bioconductor.org/packages/release/workflows/vignettes/simpleSingleCell/inst/doc/work-1-reads.html/
-# #7_modelling_the_technical_noise_in_gene_expression
 ##########################################
 TEST.Aaron.scRNAseq.workflow.clustering.part = FALSE
 if(TEST.Aaron.workflow)
 { 
+  snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
+  clusters <- igraph::cluster_walktrap(snn.gr)
+  table(clusters$membership, sce$Batch)
+  
+  csce$Cluster <- factor(clusters$membership)
+  plotTSNE(csce, colour_by="Cluster")
+  
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
   
   corrected = assay(sce, "mnn")
