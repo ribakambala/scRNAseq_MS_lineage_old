@@ -543,7 +543,7 @@ library(scran)
 set.seed(1234567)
 options(stringsAsFactors = FALSE)
 
-sce.qc = sce
+#sce.qc = sce
 
 ##########################################
 # here to prepare the inputs for MNN in scran 
@@ -554,11 +554,11 @@ sce.qc = sce
 # But many of them, e.g. BASics, Brennecke works better with spike-in 
 ##########################################
 #block <- paste0(sce.gse81076$Plate, "_", sce.gse81076$Donor)
-#fit <- trendVar(sce.gse81076, block=block, parametric=TRUE) 
+#fit <- trendVar(sce.gse81076, block=block, parametric=TRUE)
 #dec <- decomposeVar(sce.gse81076, fit)
-block <- sce.qc$request
-fit <- trendVar(sce.qc, block=block, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
-dec <- decomposeVar(sce.qc, fit)
+block <- sce$request
+fit <- trendVar(sce, block=block, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
+dec <- decomposeVar(sce, fit)
 
 plot(dec$mean, dec$total, xlab="Mean log-expression", 
      ylab="Variance of log-expression", pch=16)
@@ -577,9 +577,9 @@ length(gene.chosen)
 ##########################################
 rescaling.for.multBatch = FALSE
 if(rescaling.for.multBatch){
-  rescaled <- multiBatchNorm(sce.qc[ , which(sce.qc$request == "R6875")], 
-                             sce.qc[ , which(sce.qc$request == "R7116")],
-                             sce.qc[ , which(sce.qc$request == "R7130")])
+  rescaled <- multiBatchNorm(sce[ , which(sce.qc$request == "R6875")], 
+                             sce[ , which(sce.qc$request == "R7116")],
+                             sce[ , which(sce.qc$request == "R7130")])
   rescaled.R6875 <- rescaled[[1]]
   rescaled.R7116 <- rescaled[[2]]
   rescaled.R7130 <- rescaled[[3]] 
@@ -588,9 +588,9 @@ if(rescaling.for.multBatch){
   R7116=logcounts(rescaled.R7116)
   R7130=logcounts(rescaled.R7130)
 }else{
-  R6879 = logcounts(sce.qc[ , which(sce.qc$request == "R6875")])
-  R7116 = logcounts(sce.qc[ , which(sce.qc$request == "R7116")])
-  R7130 = logcounts(sce.qc[ , which(sce.qc$request == "R7130")])
+  R6879 = logcounts(sce[ , which(sce$request == "R6875")])
+  R7116 = logcounts(sce[ , which(sce$request == "R7116")])
+  R7130 = logcounts(sce[ , which(sce$request == "R7130")])
 }
 
 Use.fastMNN = TRUE
@@ -659,8 +659,8 @@ if(Use.mnnCorrect){
   bpp <- MulticoreParam(5)
   bpp
   
-  mnn.out2 = mnnCorrect(R6879, R7116, R7130, k = 20, sigma = 1, cos.norm.in = TRUE, cos.norm.out = TRUE, order = c(3, 2, 1), 
-                       svd.dim = 3, subset.row = gene.chosen,  pc.approx = TRUE, BPPARAM=bpp)
+  mnn.out2 = mnnCorrect(R6879, R7116, R7130, k = 20, sigma = 0.1, cos.norm.in = TRUE, cos.norm.out = TRUE, order = c(3, 2, 1), 
+                       svd.dim = 0, var.adj = FALSE, subset.row = gene.chosen, pc.approx = TRUE, BPPARAM=bpp)
   
   head(mnn.out2$pairs[[2]])
   
@@ -692,14 +692,14 @@ if(Use.mnnCorrect){
   assay(sce, "corrected") <- res
   
   #sce = sce.qc
-  
-  save(sce, mnn.out, mnn.out2, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
+  #save(sce, mnn.out, mnn.out2, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
   
   ##########################################
   # double check the relatinship between fastMNN and mnnCorrect 
   ##########################################
-  osce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts", feature_set = gene.chosen)
-  csce <- runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "corrected", feature_set = gene.chosen)
+  #osce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts", feature_set = gene.chosen)
+  csce <- runPCA(sce, ncomponents = 50, method="irlba", exprs_values = "corrected", feature_set = gene.chosen,
+                 scale_features = TRUE, detect_outliers = FALSE)
   
   xx = as.data.frame(reducedDim(csce, "MNN"));
   yy = as.data.frame(reducedDim(csce, "PCA"))
@@ -710,6 +710,9 @@ if(Use.mnnCorrect){
   par(mfrow = c(1, 2))
   plot(xx[, c(1:2)], xlab = 'PC1', ylab = "PC2", main = "lowDim output from fastMNN")
   plot(yy[, c(1:2)], xlab = 'PC1', ylab = "PC2", main = "PCA from mnnCorret output")
+  #plot(xx[, c(3:4)], xlab = 'PC1', ylab = "PC2", main = "lowDim output from fastMNN")
+  #plot(yy[, c(3:4)], xlab = 'PC1', ylab = "PC2", main = "PCA from mnnCorret output")
+  
   
   pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_fastMNNlowDim_vs_mnnCorrectOutput.pdf")
   pdf(pdfname, width=18, height = 8)
@@ -757,100 +760,68 @@ library(matrixStats)
 #library(M3Drop)
 library(RColorBrewer)
 library(SingleCellExperiment)
-set.seed(100)
+#set.seed(100)
 
 ##########################################
-# test Aaron's clustering workflow
+# test clustering methods in scran 
 # https://master.bioconductor.org/packages/release/workflows/vignettes/simpleSingleCell/inst/doc/work-1-reads.html/
 ##########################################
 TEST.Aaron.scRNAseq.workflow.clustering.part = FALSE
 if(TEST.Aaron.workflow)
 { 
+  sce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "corrected")
+  
+  #set.seed(100)
+  #sce <- runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
+  
+  set.seed(100)
+  sce <- runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
+  
+  set.seed(100)
+  sce = runUMAP(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
+  
+  #sce = runDiffusionMap(sce, use_dimred = "MNN", n_dimred = 20)
+  
+  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_testing.pdf")
+  pdf(pdfname, width=10, height = 6)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
+  fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+  
+  ##########################################
+  # test grapha method from scran
+  ##########################################
   snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
   clusters <- igraph::cluster_walktrap(snn.gr)
   table(clusters$membership, sce$Batch)
   
-  csce$Cluster <- factor(clusters$membership)
-  plotTSNE(csce, colour_by="Cluster")
-  
-  fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-  
-  corrected = assay(sce, "mnn")
-  
-    
-  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_HVG_featureSelect_clustering_", version.analysis, ".pdf")
-  pdf(pdfname, width=10, height = 6)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-  
-  block <- sce$request
-  var.fit <- trendVar(sce, block=block, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
-  var.out <- decomposeVar(sce, var.fit)
-  
-  par(mfrow=c(1, 1))
-  plot(var.out$mean, var.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
-       ylab="Variance of log-expression")
-  curve(var.fit$trend(x), col="dodgerblue", lwd=2, add=TRUE)
-  #cur.spike <- isSpike(sce)
-  #points(var.out$mean[cur.spike], var.out$total[cur.spike], col="red", pch=16)
-  
-  chosen.genes <- order(var.out$bio, decreasing=TRUE)[1:50]
-  plotExpression(sce, features=rownames(var.out)[chosen.genes]) + fontsize
-  #chosen.genes <- order(var.out.nospike$bio, decreasing=TRUE)[1:50]
-  #plotExpression(sce, features=rownames(var.out.nospike)[chosen.genes]) + fontsize
-  
-  sce <- denoisePCA(sce, technical=var.out, assay.type="mnn")
-  dim(reducedDim(sce, "PCA")) 
-  
-  #sce <- denoisePCA(sce, technical=var.fit.nospike$trend) 
-  #dim(reducedDim(sce, "PCA")) 
-  
-  # low-dimension visulization
-  plotReducedDim(sce, use_dimred="PCA", ncomponents=4, 
-                 colour_by="total_features_by_counts") + fontsize
-  
-  #plotReducedDim(sce, use_dimred="PCA", ncomponents=4, colour_by="total_features_by_counts") + fontsize + 
-  
-  set.seed(100)
-  out5 <- plotTSNE(sce, run_args=list(use_dimred="PCA", perplexity=5),
-                   colour_by="total_features_by_counts") + fontsize + ggtitle("Perplexity = 5")
-  
-  set.seed(100)
-  out10 <- plotTSNE(sce, run_args=list(use_dimred="PCA", perplexity=10),
-                    colour_by="total_features_by_counts") + fontsize + ggtitle("Perplexity = 10")
-  
-  set.seed(100)
-  out20 <- plotTSNE(sce, run_args=list(use_dimred="PCA", perplexity=20),
-                    colour_by="total_features_by_counts") + fontsize + ggtitle("Perplexity = 20")
-  
-  multiplot(out5, out10, out20, cols=3)
-  
-  set.seed(100)
-  sce <- runTSNE(sce, use_dimred="PCA", perplexity=10)
-  reducedDimNames(sce)
+  sce$cluster <- factor(clusters$membership)
+  plotTSNE(sce, colour_by="cluster") + ggtitle("scran -- graph based clustering")
+  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+    fontsize + ggtitle("scran -- graph based clustering")
   
   ##########################################
-  # clustering part 
+  # test hierachy clustering from scran
   ##########################################
-  pcs <- reducedDim(sce, "PCA")
+  pcs <- reducedDim(sce, "MNN")
   my.dist <- dist(pcs)
   my.tree <- hclust(my.dist, method="ward.D2")
   
   #hist(my.tree)
-  
   library(dynamicTreeCut)
-  my.clusters <- unname(cutreeDynamic(my.tree, method = "hybrid", 
+  my.clusters <- unname(cutreeDynamic(my.tree, cutHeight = 3, 
                                       distM=as.matrix(my.dist), 
-                                      minClusterSize=10, verbose=1))
+                                      minClusterSize=5, verbose=0))
+  
+  table(my.clusters, sce$Batch)
   
   sce$cluster <- factor(my.clusters)
-  set.seed(100)
-  csce <- runTSNE(sce, use_dimred="PCA", perplexity = 20)
-  plotTSNE(csce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize
   
-  #plotTSNE(sce,
-  #         run_args = list(exprs_values = "mnn", perplexity = 20), 
-           
+  plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("scran -- hcluster")
+  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+    fontsize + ggtitle("scran -- hcluster")
   
+  #plotDiffusionMap(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize
   
   library(cluster)
   clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
@@ -861,6 +832,58 @@ if(TEST.Aaron.workflow)
        border=sil.cols, col=sil.cols, do.col.sort=FALSE) 
   
   
+  ##########################################
+  # test graph-based Louvain algorithm 
+  ##########################################
+  require(Seurat)
+  library(cowplot)
+  #srt = Seurat::Convert(from = sce, to = "seurat") 
+  pbmc = as.Seurat(sce)
+  
+  #Seurat::DimPlot(pbmc, dims = c(1, 2), reduction = "MNN")
+  pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 10, dims = 1:10)
+  
+  pbmc = FindClusters(pbmc, resolution = 4, algorithm = 3)
+  sce$cluster <- factor(pbmc@active.ident)
+  
+  plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("seurat - graph base clustering")
+  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+    fontsize + ggtitle("seurat -- graph based clustering")
+  
+  Select.Early.timePoints = FALSE
+  if(Select.Early.timePoints){
+     
+    xx = table(sce$cluster,sce$Batch)
+    #colnames(xx) = sce$Batch
+    cluster4early = rownames(xx)[which(xx[, 1]>=5|xx[,2]>=5)]
+    
+    mm = match(sce$cluster, factor(cluster4early))
+    
+    sels = which(!is.na(mm))
+    
+    sce.sel = sce[, sels ]
+    set.seed(100)
+    sce.sel <- runTSNE(sce.sel,  use_dimred = "MNN", perplexity = 20, n_dimred = 20)
+    
+    set.seed(100)
+    sce.sel = runUMAP(sce.sel, use_dimred="MNN", perplexity = 20, n_dimred = 20)
+    
+    
+    plotTSNE(sce.sel, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("seurat - graph base clustering")
+    
+    plotUMAP(sce.sel, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+      fontsize + ggtitle("seurat -- graph based clustering")
+    
+    
+    
+  }
+  
+  dev.off()
+  
+}
+
+Find.Gene.Markers.with.scran = FALSE
+if(Find.Gene.Markers.with.scran){
   markers <- findMarkers(sce, my.clusters)
   
   marker.set <- markers[["1"]]
@@ -872,178 +895,6 @@ if(TEST.Aaron.workflow)
               colour_columns_by=c("cluster"),
               cluster_cols=FALSE, center=TRUE, symmetric=TRUE, zlim=c(-5, 5)) 
   
-  dev.off()
-  
-}
-
-##########################################
-# test seurat for clustering 
-# original codes in https://satijalab.org/seurat/pbmc3k_tutorial.html
-##########################################
-Test.Seurat.workflow = FALSE
-if(Test.Seurat.workflow){
-  library(Seurat)
-  library(dplyr)
-  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
-  
-  #pbmc = as.seurat(from = sce)
-  #pbmc = Convert(from = sce, to = 'seurat', raw.data.slot = "counts",data.slot = "logcounts")
-  pbmc <- CreateSeuratObject(raw.data = counts(sce), min.cells = 0, min.genes = 200, 
-                             project = "seurat_test")
-  pbmc <- NormalizeData(object = pbmc, normalization.method = "LogNormalize", 
-                        scale.factor = 10000)
-  
-  pbmc <- FindVariableGenes(object = pbmc, mean.function = ExpMean, dispersion.function = LogVMR, 
-                            x.low.cutoff = 0.5, y.cutoff = 0.5)
-  
-  length(x = pbmc@var.genes)
-  
-  pbmc <- ScaleData(object = pbmc)
-  
-  pbmc <- RunPCA(object = pbmc, pc.genes = pbmc@var.genes, do.print = TRUE, pcs.print = 1:5, 
-                 genes.print = 5)
-  
-  PrintPCA(object = pbmc, pcs.print = 1:5, genes.print = 5, use.full = FALSE)
-  VizPCA(object = pbmc, pcs.use = 1:2)
-  
-  PCAPlot(object = pbmc, dim.1 = 1, dim.2 = 2)
-  
-  pbmc <- ProjectPCA(object = pbmc, do.print = FALSE)
-  
-  PCHeatmap(object = pbmc, pc.use = 1:4, cells.use = 80, do.balanced = TRUE, label.columns = FALSE)
-  
-  pbmc <- JackStraw(object = pbmc, num.replicate = 100, display.progress = FALSE)
-  JackStrawPlot(object = pbmc, PCs = 1:12)
-  
-  PCElbowPlot(object = pbmc)
-  
-  pbmc <- FindClusters(object = pbmc, reduction.type = "pca", dims.use = 1:10, 
-                       resolution = 2, print.output = 0, save.SNN = TRUE)
-  
-  PrintFindClustersParams(object = pbmc)
-  #PrintCalcParams(pbmc, calculation = "FindClusters")
-  
-  pbmc <- RunTSNE(object = pbmc, dims.use = 1:10, do.fast = TRUE, perplexity=10, eta=2000)
-  TSNEPlot(object = pbmc, do.label = TRUE, pt.size = 3.0)
-  
-  ## test phate plot
-  pbmc_phate <- RunPHATE(object = pbmc, gamma=1, npca = 20, k=5, seed.use = 10, plot.optimal.t = TRUE, t=14)
-  # Plot results
-  DimPlot(object = pbmc_phate, reduction.use = 'phate', pt.size = 2.0)
-  #DimPlot(object = pbmc_phate, reduction.use = 'pca')
-}
-
-##################################################
-# test Hamberg's single-cell RNA seq analysis, clustering part
-# original code https://hemberg-lab.github.io/scRNA.seq.course/biological-analysis.html
-##################################################
-### test SC3
-TEST.Hamberg.workflow.clustering = FALSE
-if(TEST.Hamberg.workflow.clustering)
-{
-  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata')) 
-  library(SC3)
-  #library()
-  expr_matrix =  exp(logcounts(sce))
-  Brennecke_HVG <- BrenneckeGetVariableGenes(
-    expr_mat = expr_matrix,
-    spikes = NA,
-    fdr = 0.2,
-    minBiolDisp = 0.2
-  )
-  #HVG_genes <- Brennecke_HVG
-  
-  ## another method to identify by Kolodziejczyk AA, Kim JK, Tsang JCH et al. (2015)
-  assay(sce, "normcounts") <- exp(logcounts(sce))
-  means <- rowMeans(normcounts(sce))
-  cv2 <- apply(normcounts(sce), 1, var)/means^2
-  dm.stat <- DM(means, cv2)
-  #head(dm.stat)
-  
-  DM_HVG = names(dm.stat)[which(dm.stat>0.3)]
-  #DM_HVG = DM_HVG[which()]
-  #dev.off()
-  
-  sce.HVG.Brenneck = sce[rownames(sce)%in%Brennecke_HVG, ]
-  sce.HVG.DM = sce[rownames(sce)%in%DM_HVG, ]
-  
-  save(sce, sce.HVG.Brenneck, sce.HVG.DM, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_HVGsels.Rdata'))
-  #HVG_genes <- Brennecke_HVG$Gene
-  #load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_HVGsels.Rdata'))
-  
-  sce.sels = sce.HVG.Brenneck
-  #sce.sels = sce.HVG.DM
-  sce = sce.sels
-  # define feature names in feature_symbol column
-  rowData(sce)$feature_symbol <- rownames(sce)
-  # remove features with duplicated names
-  sce <- sce[!duplicated(rowData(sce)$feature_symbol), ]
-  
-  plotPCA(
-    sce,
-    run_args = list(exprs_values = "logcounts"),
-    colour_by = "total_counts",
-    size_by = "total_features_by_counts"
-  )
-  
-  ### test SC3 clustering method
-  sce = sc3_estimate_k(sce)
-  metadata(sce)$sc3$k_estimation
-  
-  sce <- sc3(sce.sels, gene_filter = FALSE, ks = 2:30, biology = TRUE, n_cores = 6)
-  #rowData(sce)$feature_symbol
-  #sce <- sc3(sce, ks = 2, gene_filter = TRUE, biology = TRUE)
-  #deng <- plotTSNE(deng, rand_seed = 1, return_SCE = TRUE)
-  
-  col_data <- colData(sce)
-  head(col_data[ , grep("sc3_", colnames(col_data))])
-  plotPCA(
-    sce, 
-    colour_by = "sc3_10_clusters", 
-    size_by = "sc3_10_log2_outlier_score"
-  )
-  
-  plotPCA(
-    sce, 
-    colour_by = "sc3_3_clusters",
-    shape_by = "celltypes",
-    size_by = "total_features_by_counts"
-  )
-  
-  row_data <- rowData(sce)
-  head(row_data[ , grep("sc3_", colnames(row_data))])
-  
-  plotFeatureData(
-    sce, 
-    aes(
-      x = sc3_3_markers_clusts, 
-      y = sc3_3_markers_auroc, 
-      colour = sc3_3_markers_padj
-    )
-  )
-  
-  set.seed(1)
-  plotTSNE(sce, colour_by="sc3_6_clusters", size_by = "total_features_by_counts",
-           run_args = list(perplexity=20)) 
-  
-  #sc3_plot_consensus(sce, k = 3)
-  sc3_plot_consensus(
-    sce, k = 3, 
-    show_pdata = c(
-      "celltypes", 
-      "sc3_3_clusters", 
-      "log10_total_features_by_counts",
-      "log10_total_counts",
-      
-      "sc3_3_log2_outlier_score"
-    )
-  )
-  
-  sc3_plot_cluster_stability(sce, k = 6)
-  
-  sc3_plot_de_genes(sce, k = 3, p.val = 0.2)
-  
-  sc3_plot_markers(sce, k = 3)
   
 }
 
