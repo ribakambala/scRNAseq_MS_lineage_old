@@ -855,7 +855,7 @@ if(TEST.Aaron.workflow)
      
     xx = table(sce$cluster,sce$Batch)
     #colnames(xx) = sce$Batch
-    cluster4early = rownames(xx)[which(xx[, 1]>=5|xx[,2]>=5)]
+    cluster4early = rownames(xx)[which(xx[, 1]>=8|xx[,2]>=8)]
     
     mm = match(sce$cluster, factor(cluster4early))
     
@@ -874,7 +874,13 @@ if(TEST.Aaron.workflow)
     plotUMAP(sce.sel, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
       fontsize + ggtitle("seurat -- graph based clustering")
     
+    design <- model.matrix( ~ sce.sel$Batch)
+    #design <- design[,-1,drop=FALSE]
     
+    markers <- findMarkers(sce.sel, sce.sel$cluster, design=design, direction = 'up')
+    
+    demo <- m.alt[["1"]]
+    as.data.frame(demo[demo$Top <= 5,1:3])
     
   }
   
