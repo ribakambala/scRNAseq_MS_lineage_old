@@ -852,10 +852,11 @@ if(TEST.Aaron.workflow)
   
   Select.Early.timePoints = FALSE
   if(Select.Early.timePoints){
-     
+    
     xx = table(sce$cluster,sce$Batch)
     #colnames(xx) = sce$Batch
-    cluster4early = rownames(xx)[which(xx[, 1]>=8|xx[,2]>=8)]
+    
+    cluster4early = rownames(xx)[which(xx[, 1]>=5|xx[,2]>=5)]
     
     mm = match(sce$cluster, factor(cluster4early))
     
@@ -867,7 +868,6 @@ if(TEST.Aaron.workflow)
     
     set.seed(100)
     sce.sel = runUMAP(sce.sel, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-    
     
     plotTSNE(sce.sel, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("seurat - graph base clustering")
     
@@ -887,7 +887,11 @@ if(TEST.Aaron.workflow)
   dev.off()
   
 }
-
+##########################################
+# DE analysis (or marker gene finding) following the cluster analysis
+# To do it, we also have several options
+# 1) scran 
+##########################################
 Find.Gene.Markers.with.scran = FALSE
 if(Find.Gene.Markers.with.scran){
   markers <- findMarkers(sce, my.clusters)
