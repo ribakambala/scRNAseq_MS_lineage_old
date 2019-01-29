@@ -843,7 +843,8 @@ if(TEST.Aaron.workflow)
   #Seurat::DimPlot(pbmc, dims = c(1, 2), reduction = "MNN")
   pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 10, dims = 1:10)
   
-  pbmc = FindClusters(pbmc, resolution = 4, algorithm = 3)
+  pbmc = FindClusters(pbmc, resolution = 1, algorithm = 3)
+  sce$cluster_seurat <- factor(pbmc@active.ident)
   sce$cluster <- factor(pbmc@active.ident)
   
   plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("seurat - graph base clustering")
@@ -877,7 +878,7 @@ if(TEST.Aaron.workflow)
     design <- model.matrix( ~ sce.sel$Batch)
     #design <- design[,-1,drop=FALSE]
     
-    markers <- findMarkers(sce.sel, sce.sel$cluster, design=design, direction = 'up')
+    markers <- findMarkers(sce.sel, sce.sel$cluster, design=design)
     
     demo <- m.alt[["1"]]
     as.data.frame(demo[demo$Top <= 5,1:3])
@@ -894,16 +895,31 @@ if(TEST.Aaron.workflow)
 ##########################################
 Find.Gene.Markers.with.scran = FALSE
 if(Find.Gene.Markers.with.scran){
-  markers <- findMarkers(sce, my.clusters)
+  my.clusters = as.numeric(as.character(sce$cluster_seurat))
   
-  marker.set <- markers[["1"]]
-  head(marker.set, 10)
+  design <- model.matrix( ~ sce$Batch)
+  design <- design[,-1,drop=FALSE]
   
-  top.markers <- rownames(marker.set)[marker.set$Top <= 5]
-  plotHeatmap(sce, features=top.markers, 
-              columns=order(sce$cluster), 
+  # run the find markers and then collect markers for each clusters
+  markers <- findMarkers(sce, my.clusters, design = design)
+  
+  ntops = 5;
+  top.markers = c()
+  
+  for(n in unique(my.clusters)){
+    #n = 0
+    marker.set <- markers[[as.character(n)]]
+    #marker.set <- markers[["1"]]
+    #head(marker.set, 5)
+    top.markers <- c(top.markers, rownames(marker.set)[marker.set$Top <= ntops])  
+  }
+  top.markers = unique(top.markers)
+  
+  plotHeatmap(sce, features=top.markers,
+              columns=order(sce$cluster_seurat), 
               colour_columns_by=c("cluster"),
-              cluster_cols=FALSE, center=TRUE, symmetric=TRUE, zlim=c(-5, 5)) 
+              cluster_cols=FALSE, show_colnames = FALSE,
+              center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
   
   
 }
