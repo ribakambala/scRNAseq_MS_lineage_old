@@ -842,7 +842,6 @@ if(TEST.Aaron.workflow)
   
   #Seurat::DimPlot(pbmc, dims = c(1, 2), reduction = "MNN")
   pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 10, dims = 1:10)
-  
   pbmc = FindClusters(pbmc, resolution = 1, algorithm = 3)
   sce$cluster_seurat <- factor(pbmc@active.ident)
   sce$cluster <- factor(pbmc@active.ident)
@@ -850,41 +849,7 @@ if(TEST.Aaron.workflow)
   plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("seurat - graph base clustering")
   plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
     fontsize + ggtitle("seurat -- graph based clustering")
-  
-  Select.Early.timePoints = FALSE
-  if(Select.Early.timePoints){
-    
-    xx = table(sce$cluster,sce$Batch)
-    #colnames(xx) = sce$Batch
-    
-    cluster4early = rownames(xx)[which(xx[, 1]>=5|xx[,2]>=5)]
-    
-    mm = match(sce$cluster, factor(cluster4early))
-    
-    sels = which(!is.na(mm))
-    
-    sce.sel = sce[, sels ]
-    set.seed(100)
-    sce.sel <- runTSNE(sce.sel,  use_dimred = "MNN", perplexity = 20, n_dimred = 20)
-    
-    set.seed(100)
-    sce.sel = runUMAP(sce.sel, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-    
-    plotTSNE(sce.sel, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("seurat - graph base clustering")
-    
-    plotUMAP(sce.sel, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
-      fontsize + ggtitle("seurat -- graph based clustering")
-    
-    design <- model.matrix( ~ sce.sel$Batch)
-    #design <- design[,-1,drop=FALSE]
-    
-    markers <- findMarkers(sce.sel, sce.sel$cluster, design=design)
-    
-    demo <- m.alt[["1"]]
-    as.data.frame(demo[demo$Top <= 5,1:3])
-    
-  }
-  
+
   dev.off()
   
 }
@@ -915,14 +880,120 @@ if(Find.Gene.Markers.with.scran){
   }
   top.markers = unique(top.markers)
   
+  fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+  
+  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_markerGenes.pdf")
+  pdf(pdfname, width=16, height = 12)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
+  plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + 
+    ggtitle("seurat - graph base clustering") +
+    theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+  
+  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+    fontsize + ggtitle("seurat -- graph based clustering")
+
   plotHeatmap(sce, features=top.markers,
               columns=order(sce$cluster_seurat), 
               colour_columns_by=c("cluster"),
               cluster_cols=FALSE, show_colnames = FALSE,
               center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
   
+ dev.off()
+ 
+}
+
+##########################################
+# here select subset of whole dataset to redo clustering
+# and marker gene finding
+# this is the beginning of iterative clustering, 
+# the gene marker finding will be a criterion to stop iteration 
+##########################################
+Select.Early.timePoints = FALSE
+if(Select.Early.timePoints){
+  
+  pbmc = as.Seurat(sce)
+  #Seurat::DimPlot(pbmc, dims = c(1, 2), reduction = "MNN")
+  pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 10, dims = 1:10)
+  pbmc = FindClusters(pbmc, resolution = 2, algorithm = 3)
+  sce$cluster_seurat <- factor(pbmc@active.ident)
+  sce$cluster <- factor(pbmc@active.ident)
+  
+  xx = table(sce$cluster,sce$Batch)
+  #colnames(xx) = sce$Batch
+  cluster4early = rownames(xx)[which(xx[, 1]>=5|xx[,2]>=5)]
+  
+  mm = match(sce$cluster, factor(cluster4early))
+  
+  sels = which(!is.na(mm))
+  
+  cat("estimated cell in early stage -- ", length(cluster4early), 
+      "clusters with", length(sels),  "cells\n")
+  
+  sce.sel = sce[, sels ]
+  # here rerun the clustering for clusters or stages
+  pcs <- reducedDim(sce.sel, "MNN")
+  my.dist <- dist(pcs[, c(1:20)])
+  my.tree <- hclust(my.dist, method="ward.D2")
+  
+  #hist(my.tree)
+  library(dynamicTreeCut)
+  my.clusters <- unname(cutreeDynamic(my.tree,
+                                      distM=as.matrix(my.dist), 
+                                      minClusterSize=5, verbose=0))
+  
+  table(my.clusters, sce.sel$Batch)
+  
+  sce.sel$cluster <- factor(my.clusters)
+  
+  
+  set.seed(100)
+  sce.sel <- runTSNE(sce.sel,  use_dimred = "MNN", perplexity = 20, n_dimred = 20)
+  
+  set.seed(100)
+  sce.sel = runUMAP(sce.sel, use_dimred="MNN", perplexity = 20, n_dimred = 20)
+  
+  plotTSNE(sce.sel, colour_by="cluster", size_by = "total_features_by_counts") + 
+    fontsize + ggtitle("scran -- hcluster")
+  plotUMAP(sce.sel, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+    fontsize + ggtitle("scran -- hcluster")
+  
+  design <- model.matrix( ~ sce.sel$Batch)
+  design <- design[,-1,drop=FALSE]
+  
+  markers <- findMarkers(sce.sel, sce.sel$cluster, design=design, direction = 'any')
+  
+  ntops = 5;
+  top.markers = c()
+  
+  for(n in unique(my.clusters)){
+    #n = 0
+    marker.set <- markers[[as.character(n)]]
+    #marker.set <- markers[["1"]]
+    #head(marker.set, 5)
+    top.markers <- c(top.markers, rownames(marker.set)[marker.set$Top <= ntops])  
+  }
+  top.markers = unique(top.markers)
+  
+  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_markerGenes_earlyTimepoint.pdf")
+  pdf(pdfname, width=12, height = 10)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
+  plotTSNE(sce.sel, colour_by="cluster", size_by = "total_features_by_counts") + 
+    fontsize + ggtitle("scran -- hcluster (tSNE)")
+  plotUMAP(sce.sel, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+    fontsize + ggtitle("scran -- hcluster (UMAP)")
+  
+  plotHeatmap(sce.sel, features=top.markers,
+              columns=order(sce.sel$cluster), 
+              colour_columns_by=c("cluster"),
+              cluster_cols=FALSE, show_colnames = FALSE,
+              center=TRUE, symmetric=TRUE, zlim = c(-5, 5))
+  
+  dev.off()
   
 }
+
 
 
 ########################################################
