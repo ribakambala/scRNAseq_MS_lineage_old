@@ -882,7 +882,7 @@ if(Find.Gene.Markers.with.scran){
   
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
   
-  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_markerGenes.pdf")
+  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_markerGenes_examples.pdf")
   pdf(pdfname, width=16, height = 12)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
@@ -898,6 +898,11 @@ if(Find.Gene.Markers.with.scran){
               colour_columns_by=c("cluster"),
               cluster_cols=FALSE, show_colnames = FALSE,
               center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
+  
+  for(n in 1:length(top.markers)) {
+    xx = plotTSNE(sce, colour_by = top.markers[n]) 
+    plot(xx)
+  }
   
  dev.off()
  
@@ -946,7 +951,6 @@ if(Select.Early.timePoints){
   
   sce.sel$cluster <- factor(my.clusters)
   
-  
   set.seed(100)
   sce.sel <- runTSNE(sce.sel,  use_dimred = "MNN", perplexity = 20, n_dimred = 20)
   
@@ -975,7 +979,7 @@ if(Select.Early.timePoints){
   }
   top.markers = unique(top.markers)
   
-  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_markerGenes_earlyTimepoint.pdf")
+  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_markerGenes_earlyTimepoint_tSNEexample.pdf")
   pdf(pdfname, width=12, height = 10)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
@@ -989,6 +993,11 @@ if(Select.Early.timePoints){
               colour_columns_by=c("cluster"),
               cluster_cols=FALSE, show_colnames = FALSE,
               center=TRUE, symmetric=TRUE, zlim = c(-5, 5))
+  
+  for(n in 1:length(top.markers)) {
+    xx = plotTSNE(sce.sel, colour_by = top.markers[n]) 
+    plot(xx)
+  }
   
   dev.off()
   
