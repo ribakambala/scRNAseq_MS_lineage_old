@@ -7,7 +7,7 @@
 ## Date of creation: Mon Feb 19 14:43:38 2018
 ##################################################
 ##################################################
-version.DATA = 'R6875_R7116_R7130_scRNA_v1'
+version.DATA = 'R6875_R7116_R7130_R7130redo_R7133_scRNA_v1'
 version.analysis =  paste0(version.DATA, '_20190116')
 
 
@@ -52,6 +52,9 @@ for(n in 1:length(xlist))
 }
 
 colnames(aa)[1] = 'gene';
+if(length(grep("out_gene.featureCounts.txt", colnames(aa)))>0) {
+  aa = aa[, -grep("out_gene.featureCounts.txt", colnames(aa))]
+}
 
 ##########################################
 # manually make design matrix 
@@ -61,10 +64,12 @@ if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
   library("openxlsx")
   
   design = data.frame(samples = colnames(aa)[-1], stringsAsFactors = FALSE)
-  design$flowcell.lane = gsub(".\\w+$", "",  design$samples)
-  design$sampleIDs = gsub('^\\w+_\\d.', "", design$samples)
-  design$sampleIDs = gsub('_\\w+$', '', design$sampleIDs)
-  design$barcodes = gsub('^\\w+_\\d.\\d+_', '', design$samples)
+  design = data.frame(sapply(design, function(x) gsub('[.]', '_', x)), stringsAsFactors = FALSE)
+  
+  design$flowcell.lane = sapply(design$samples, function(x) paste0(unlist(strsplit(as.character(x), "_"))[c(1:2)], collapse = "_"))
+  design$sampleIDs = sapply(design$samples, function(x) unlist(strsplit(as.character(x), "_"))[3])
+  #design$sampleIDs = gsub('_\\w+$', '', design$sampleIDs)
+  design$barcodes = sapply(design$samples, function(x) unlist(strsplit(as.character(x), "_"))[4])
   
   ##########################################
   # here manually 
@@ -74,6 +79,12 @@ if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
   design$request[which(design$flowcell.lane == "CCVBPANXX_1")] = "R7116"
   design$request[which(design$flowcell.lane == "HHG5KBGX9_1")] = "R7130"
   design$request[which(design$flowcell.lane == "HHGHNBGX9_1")] = "R7130"
+  
+  design$request[which(design$flowcell.lane == "HLWTCBGX9_1")] = "R7130"
+  design$request[which(design$flowcell.lane == "CCYTEANXX_4")] = "R7130"
+  design$request[which(design$flowcell.lane == "CD2GTANXX_5")] = "R7133"
+  
+
   design$seqInfos = paste0(design$request, "_", design$flowcell.lane)
   #jj = grep("CCVTBANXX_8.76090_", colnames(aa))
   #aa = aa[, c(1, jj)]
@@ -128,9 +139,10 @@ if(Aggregate.nf.QCs.plots.in.designMatrix){
   
   source('functions_aggregate_nf_qc.R')
   dirs.all = c('../../../Ariane/R7116_R7130_scrnaseq/results_all/multiqc_data_1', 
-               "../../../Ariane/R6875_scRNAseq/results_all_3rd/MultiQC/multiqc_data")
+               "../../../Ariane/R6875_scRNAseq/results_all_3rd/MultiQC/multiqc_data", 
+               "../../R7130_redo_R7133/results_v2/multiqc_data_1")
   QCs.nf = aggrate.nf.QCs(dirs.all)
-  QCs.nf$Sample = gsub("#", ".", QCs.nf$Sample)
+  QCs.nf$Sample = gsub("#", "_", QCs.nf$Sample)
   
   mm = match(design$samples, QCs.nf$Sample)
   xx = data.frame(design, QCs.nf[mm, ], stringsAsFactors = FALSE)
@@ -138,6 +150,7 @@ if(Aggregate.nf.QCs.plots.in.designMatrix){
   design = xx;
    
 }
+
 
 save(aa, design, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_sampleInfos_QCs_nf_RNA_seq.Rdata'))
 
