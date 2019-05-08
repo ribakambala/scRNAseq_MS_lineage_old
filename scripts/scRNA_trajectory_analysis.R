@@ -19,7 +19,7 @@ if(Test.Monocole){
   library(reshape2)
   
   load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata')) 
-  
+  load(file = paste0("../results/R6875_scRNA_v1_20181106/Rdata/R6875_scRNA_v1_QCed_cells_genes_filtered_normalized_SCE.Rdata"))
   # importCDS(sce, import_all = FALSE)
   HSMM <- newCellDataSet(as.matrix(counts(sce)),
                          expressionFamily=VGAM::negbinomial.size())

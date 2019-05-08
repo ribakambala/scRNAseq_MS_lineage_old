@@ -8,7 +8,7 @@
 ##################################################
 ##################################################
 version.DATA = 'R6875_R7116_R7130_R7130redo_R7133_scRNA_v1'
-version.analysis =  paste0(version.DATA, '_20190116')
+version.analysis =  paste0(version.DATA, '_20190506')
 
 
 dataDir = paste0("../data/")
@@ -137,7 +137,7 @@ if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
 if(Aggregate.nf.QCs.plots.in.designMatrix){
   #load(file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_RNA_seq.Rdata'))
   
-  source('functions_aggregate_nf_qc.R')
+  source("scRNAseq_functions.R")
   dirs.all = c('../../../Ariane/R7116_R7130_scrnaseq/results_all/multiqc_data_1', 
                "../../../Ariane/R6875_scRNAseq/results_all_3rd/MultiQC/multiqc_data", 
                "../../R7130_redo_R7133/results_v2/multiqc_data_1")
@@ -193,6 +193,21 @@ ggs.unique = unique(ggs)
 rownames(counts) = ggs
 
 ##########################################
+# compare tehnical replicates,
+# merge them 
+# or benchmark batch correction methods
+##########################################
+source("scRNAseq_functions.R")
+
+pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting.pdf")
+pdf(pdfname, width=18, height = 6)
+par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+
+compare.techinical.replicates(design, counts)
+
+dev.off()
+
+##########################################
 # Import SingleCellExperiment and scater packages for the QC and table cleaning
 # several steps will be proceded:
 # 1) general overview of data quality: sequencing depth, mapping rate, assignment rate, rRAN codamination for each sequencing lane
@@ -202,6 +217,11 @@ rownames(counts) = ggs
 library(SingleCellExperiment)
 library(scater)
 options(stringsAsFactors = FALSE)
+
+# change seqInfos in design to label technicalreps 
+design$seqInfos[which(design$seqInfos=="R7130_HLWTCBGX9_1")] = "R7130_HHG5KBGX9_1_techrep_nexseq"
+design$seqInfos[which(design$seqInfos=="R7130_CCYTEANXX_4")] = "R7130_HHGHNBGX9_1_techrep_hiseq"
+design$seqInfos[which(design$seqInfos=="R7133_CD2GTANXX_5")] = "R7130_HHGHNBGX9_1_techrep_hiseq_R7133"
 
 ## add some new features for design for quality controls
 design$log10_Total = log10(design$total_reads)
@@ -232,10 +252,11 @@ head(colnames(colData(sce)), 20)
 ## filter cells with low quality 
 ####################
 pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting.pdf")
-pdf(pdfname, width=10, height = 6)
+pdf(pdfname, width=18, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
 # some general statistics for each request and lane
+#cols = c(rep('gray', 2), 'red', 'darkblue', 'darkred', 'blue', 'red')
 plotColData(sce, y = "log10_Total", x = "seqInfos") + ggtitle("total nb of reads")
 plotColData(sce, y="uniquely_mapped_percent", x="seqInfos") + ggtitle("% of uniquely mapped ")
 plotColData(sce, y="percent_assigned", x="seqInfos") + ggtitle("% of assigned")
@@ -266,11 +287,12 @@ plotColData(sce,
 
 dev.off()
 
+
 ##########################################
 ## filter cells with low quality 
 # here we are using the 50,000 for library size and 100 expressed genes as thresholds
 ##########################################
-threshod.total.counts.per.cell = 10^5
+threshod.total.counts.per.cell = 10^4
 threshod.nb.detected.genes.per.cell = 1000;
 #libsize.drop <- isOutlier(sce$total_counts, nmads=3, type="lower", log=TRUE)
 #feature.drop <- isOutlier(sce$total_features, nmads=3, type="lower", log=TRUE)
