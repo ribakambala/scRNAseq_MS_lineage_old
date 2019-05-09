@@ -276,7 +276,7 @@ dev.off()
 # merge them 
 # or benchmark batch correction methods
 ##########################################
-pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting.pdf")
+pdfname = paste0(resDir, "/scRNAseq_check_technicalRep.pdf")
 pdf(pdfname, width=18, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
@@ -286,12 +286,16 @@ par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 #design$seqInfos[which(design$seqInfos=="R7133_CD2GTANXX_5")] = "R7130_HHGHNBGX9_1_techrep_hiseq_R7133"
 source("scRNAseq_functions.R")
 
-xx = compare.merge.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"))
+compare.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"))
 
-compare.merge.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"))
+compare.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"))
 
 dev.off()
 
+
+xx = merge.techinical.replicates(design = design[, c(1:6)], counts = counts, 
+                                 sampleInfos.techRep = list(c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"), 
+                                                            c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5")))
 
 ##########################################
 ## filter cells with low quality 

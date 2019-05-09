@@ -94,8 +94,8 @@ aggrate.nf.QCs = function(dirs.all, modules2cat = c("star", "featureCounts"))
 # function for collapse technical replicates in the lane level
 # 
 ##########################################
-compare.merge.techinical.replicates = function(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"),
-                                               filter.cell.gene = FALSE)
+compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"),
+                                               filter.cell.gene = FALSE, check.correlations = FALSE)
 {
   sinfos.uniq = unique(design$seqInfos)
   mm = match(sampleInfos.techRep, sinfos.uniq)
@@ -227,20 +227,35 @@ compare.merge.techinical.replicates = function(design, counts, sampleInfos.techR
   ## check the correction of the same cells from different technical replicates
   bcs = unique(sce.qc$barcodes)
   
-  correlations = c()
+  if(check.correlations){
+    correlations = c()
+    
+    for(n in 1:length(bcs))
+    {
+      # n = 18
+      kk = which(sce.qc$barcodes == bcs[n])
+      xx = as.data.frame(logcounts(sce.qc[,kk[match(sampleInfos.techRep, sce.qc$seqInfos[kk])]]))
+      ss = apply(xx, 1, sum)
+      xx = xx[ss>0, ]
+      #xx = as.data.frame(logcounts(sce.qc[, ]))
+      if(ncol(xx) == 3) correlations = rbind(correlations, c(cor(xx[, 1], xx[, 2]), cor(xx[, 1], xx[, 3]), cor(xx[, 2], xx[, 3])))
+    }
+    pairs(correlations, lower.panel=NULL, upper.panel=panel.fitting)
+    colnames(correlations) = c('rep0.vs.hiseq.rep1', 'rep0.vs.hiseq.rep2', 'hiseq.rep1.vs.hiseq.rep_2')
   
-  for(n in 1:length(bcs))
-  {
-    # n = 1
-    xx = as.data.frame(logcounts(sce.qc[, which(sce.qc$barcodes == bcs[n])]))
-    if(ncol(xx) == 3) correlations = rbind(correlations, c(cor(xx[, 1], xx[, 2]), cor(xx[, 1], xx[, 3]), cor(xx[, 2], xx[, 3])))
   }
   
-  colnames(correlations) = c('rep0.vs.hiseq.rep1', 'rep0.vs.hiseq.rep2', 'hiseq.rep1.vs.hiseq.rep_2')
-  
+}
+
+
+merge.techinical.replicates = function(design, counts, 
+                                       sampleInfos.techRep = list(c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"),
+                                                                  c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5")))
+{
   
   
 }
+
 
 panel.cor <- function(x, y, digits=2, prefix="", cex.cor) 
 {
