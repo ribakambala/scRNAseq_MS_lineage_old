@@ -91,33 +91,37 @@ aggrate.nf.QCs = function(dirs.all, modules2cat = c("star", "featureCounts"))
 
 
 ##########################################
-# function for technical replicates 
+# function for collapse technical replicates in the lane level
+# 
 ##########################################
-compare.techinical.replicates = function(design, counts)
+compare.merge.techinical.replicates = function(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"),
+                                               filter.cell.gene = FALSE)
 {
+  sinfos.uniq = unique(design$seqInfos)
+  mm = match(sampleInfos.techRep, sinfos.uniq)
+  
+  if(any(is.na(mm))) stop("Missed technical replicates : ", sampleInfos.techRep[which(is.na(mm))], "\n")
+  
   library(SingleCellExperiment)
   library(scater)
+  library(scRNA.seq.funcs)
+  library(scran)
   options(stringsAsFactors = FALSE)
-  
-  # change seqInfos in design to label technicalreps 
-  design$seqInfos[which(design$seqInfos=="R7130_HLWTCBGX9_1")] = "R7130_HHG5KBGX9_1_techrep_nexseq"
-  design$seqInfos[which(design$seqInfos=="R7130_CCYTEANXX_4")] = "R7130_HHGHNBGX9_1_techrep_hiseq"
-  design$seqInfos[which(design$seqInfos=="R7133_CD2GTANXX_5")] = "R7130_HHGHNBGX9_1_techrep_hiseq_R7133"
   
   ## add some new features for design for quality controls
   design$log10_Total = log10(design$total_reads)
-  #design$percent_mapped = design$uniquely_mapped/design$T
-  #design$percent_assigned = design$Assigned/design$uniquely_mapped
   design$percent_rRNA = design$rRNA / design$Total
+  
   
   ## make SCE object and remove genes with zero reads detected
   sce <- SingleCellExperiment(assays = list(counts = counts), 
                               colData = as.data.frame(design), 
                               rowData = data.frame(gene_names = rownames(counts), feature_symbol = rownames(counts)))
   #write.csv(counts(sce), file=paste0(tabDir, "scRNAseq_raw_readCounts", version.analysis, ".csv"), row.names=TRUE)
-  keep_feature <- rowSums(counts(sce) > 0) > 0
-  sce <- sce[keep_feature, ]
-  
+  #keep_feature <- rowSums(counts(sce) > 0) > 0
+  #sce <- sce[keep_feature, ]
+  kk.tech = !is.na(match(design$seqInfos, sampleInfos.techRep))
+  sce = sce[, kk.tech]
   
   #is.spike <- grepl("^ERCC", rownames(sce))
   is.mito <- rownames(sce) %in% gg.Mt;
@@ -129,7 +133,7 @@ compare.techinical.replicates = function(design, counts)
   
   head(colnames(colData(sce)), 20)
   
-  # some general statistics for each request and lane
+  # check some general statistics for each request and lane
   #cols = c(rep('gray', 2), 'red', 'darkblue', 'darkred', 'blue', 'red')
   plotColData(sce, y = "log10_Total", x = "seqInfos") + ggtitle("total nb of reads")
   plotColData(sce, y="uniquely_mapped_percent", x="seqInfos") + ggtitle("% of uniquely mapped ")
@@ -139,14 +143,6 @@ compare.techinical.replicates = function(design, counts)
   
   plotColData(sce, y="log10_total_counts", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
   plotColData(sce, y="total_features_by_counts", x="seqInfos") + ggtitle("total nb of genes")
-  
-  plotColData(sce, 
-              x = "log10_Total",
-              y = "uniquely_mapped_percent",
-              #colour_by = "uniquely_mapped_percent",
-              colour_by = "seqInfos",
-              size_by = "pct_counts_Ribo"
-  )
   
   plotColData(sce,
               x = "log10_total_counts",
@@ -160,57 +156,47 @@ compare.techinical.replicates = function(design, counts)
     geom_vline(xintercept = c(4:6), linetype="dotted", color = "black", size=0.5)
   
   # filter cell and genes
-  threshod.total.counts.per.cell = 10^4
-  threshod.nb.detected.genes.per.cell = 1000;
-  
-  filter_by_total_counts <- (sce$total_counts > threshod.total.counts.per.cell)
-  table(filter_by_total_counts)
-  filter_by_expr_features <- (sce$total_features_by_counts > threshod.nb.detected.genes.per.cell)
-  table(filter_by_expr_features)
-  filter_by_MT = sce$pct_counts_Mt < 7.5
-  table(filter_by_MT)
-  
-  sce$use <- (
-    filter_by_expr_features & # sufficient features (genes)
-      filter_by_total_counts & # sufficient molecules counted
-      # filter_by_ERCC & # sufficient endogenous RNA
-      filter_by_MT # remove cells with unusual number of reads in MT genes
-  )
-  table(sce$use)
-  sce = sce[, sce$use]
-  
-  num.cells <- nexprs(sce, byrow=TRUE)
-  ave.counts <- calcAverage(sce)
-  genes.to.keep <- num.cells > 5 & ave.counts >= 1  & ave.counts <10^6  # detected in >= 2 cells, ave.counts >=5 but not too high
-  summary(genes.to.keep)
-  # remove mt and ribo genes
-  genes.to.keep = genes.to.keep & ! rownames(sce) %in% gg.Mt & ! rownames(sce) %in% gg.ribo
-  summary(genes.to.keep)
-  
-  sce <- sce[genes.to.keep, ]
-  
+  if(filter.cell.gene){
+    threshod.total.counts.per.cell = 10^4
+    threshod.nb.detected.genes.per.cell = 1000;
+    
+    filter_by_total_counts <- (sce$total_counts > threshod.total.counts.per.cell)
+    table(filter_by_total_counts)
+    filter_by_expr_features <- (sce$total_features_by_counts > threshod.nb.detected.genes.per.cell)
+    table(filter_by_expr_features)
+    filter_by_MT = sce$pct_counts_Mt < 7.5
+    table(filter_by_MT)
+    
+    sce$use <- (
+      filter_by_expr_features & # sufficient features (genes)
+        filter_by_total_counts & # sufficient molecules counted
+        # filter_by_ERCC & # sufficient endogenous RNA
+        filter_by_MT # remove cells with unusual number of reads in MT genes
+    )
+    table(sce$use)
+    sce = sce[, sce$use]
+    
+    num.cells <- nexprs(sce, byrow=TRUE)
+    ave.counts <- calcAverage(sce)
+    genes.to.keep <- num.cells > 5 & ave.counts >= 1  & ave.counts <10^6  # detected in >= 2 cells, ave.counts >=5 but not too high
+    summary(genes.to.keep)
+    # remove mt and ribo genes
+    genes.to.keep = genes.to.keep & ! rownames(sce) %in% gg.Mt & ! rownames(sce) %in% gg.ribo
+    summary(genes.to.keep)
+    
+    sce <- sce[genes.to.keep, ]
+    
+  }
   
   # select cells having technical replicates and normalize them  
-  library(scRNA.seq.funcs)
-  library(scater)
-  library(scran)
-  options(stringsAsFactors = FALSE)
-  
-  sce$sels = (sce$request !="R6875" & sce$request != "R7116" & sce$seqInfos != "R7130_HHG5KBGX9_1_techrep_nexseq" &
-                sce$seqInfos != "R7130_HHG5KBGX9_1")
-  sce.qc = sce[, sce$sels]
+  sce.qc = sce
   
   reducedDim(sce.qc) <- NULL
   endog_genes <- !rowData(sce.qc)$is_feature_control
   
   set.seed(1234567)
   assay(sce.qc, "logcounts") <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
-  #sizeFactors(sce.qc) = calculate.sizeFactors.DESeq2(counts(sce.qc))
-  #sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
-  #qclust <- quickCluster(sce.qc, min.size = 30)
-  #sce.qc <- computeSumFactors(sce.qc, sizes = 15, clusters = qclust)
-  #sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
-  
+      
   main = "cpm"
   scater::plotPCA(
     sce.qc[endog_genes, ],
@@ -240,15 +226,20 @@ compare.techinical.replicates = function(design, counts)
   
   ## check the correction of the same cells from different technical replicates
   bcs = unique(sce.qc$barcodes)
+  
   correlations = c()
+  
   for(n in 1:length(bcs))
   {
-    #n = 1
+    # n = 1
     xx = as.data.frame(logcounts(sce.qc[, which(sce.qc$barcodes == bcs[n])]))
     if(ncol(xx) == 3) correlations = rbind(correlations, c(cor(xx[, 1], xx[, 2]), cor(xx[, 1], xx[, 3]), cor(xx[, 2], xx[, 3])))
   }
   
   colnames(correlations) = c('rep0.vs.hiseq.rep1', 'rep0.vs.hiseq.rep2', 'hiseq.rep1.vs.hiseq.rep_2')
+  
+  
+  
 }
 
 panel.cor <- function(x, y, digits=2, prefix="", cex.cor) 

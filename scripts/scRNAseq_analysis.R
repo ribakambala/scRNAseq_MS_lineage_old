@@ -193,40 +193,21 @@ ggs.unique = unique(ggs)
 rownames(counts) = ggs
 
 ##########################################
-# compare tehnical replicates,
-# merge them 
-# or benchmark batch correction methods
-##########################################
-source("scRNAseq_functions.R")
-
-pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting.pdf")
-pdf(pdfname, width=18, height = 6)
-par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-
-compare.techinical.replicates(design, counts)
-
-dev.off()
-
-##########################################
 # Import SingleCellExperiment and scater packages for the QC and table cleaning
 # several steps will be proceded:
 # 1) general overview of data quality: sequencing depth, mapping rate, assignment rate, rRAN codamination for each sequencing lane
 # 2) clean the cells 
 # 3) clean genes 
 ##########################################
+source("scRNAseq_functions.R")
 library(SingleCellExperiment)
 library(scater)
 options(stringsAsFactors = FALSE)
 
-# change seqInfos in design to label technicalreps 
-design$seqInfos[which(design$seqInfos=="R7130_HLWTCBGX9_1")] = "R7130_HHG5KBGX9_1_techrep_nexseq"
-design$seqInfos[which(design$seqInfos=="R7130_CCYTEANXX_4")] = "R7130_HHGHNBGX9_1_techrep_hiseq"
-design$seqInfos[which(design$seqInfos=="R7133_CD2GTANXX_5")] = "R7130_HHGHNBGX9_1_techrep_hiseq_R7133"
-
-## add some new features for design for quality controls
+## add or control some new features for design for quality controls
 design$log10_Total = log10(design$total_reads)
 #design$percent_mapped = design$uniquely_mapped/design$T
-#design$percent_assigned = design$Assigned/design$uniquely_mapped
+design$percent_proteinCoding = design$protein_coding/design$total_reads
 design$percent_rRNA = design$rRNA / design$Total
 
 ## make SCE object and remove genes with zero reads detected
@@ -260,10 +241,13 @@ par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 plotColData(sce, y = "log10_Total", x = "seqInfos") + ggtitle("total nb of reads")
 plotColData(sce, y="uniquely_mapped_percent", x="seqInfos") + ggtitle("% of uniquely mapped ")
 plotColData(sce, y="percent_assigned", x="seqInfos") + ggtitle("% of assigned")
+plotColData(sce, y="percent_proteinCoding", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
+
 plotColData(sce, y="pct_counts_Ribo", x="seqInfos") + ggtitle("% of rRNA contamination")
 plotColData(sce, y="pct_counts_Mt", x="seqInfos") + ggtitle("% of Mt")
 
 plotColData(sce, y="log10_total_counts", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
+
 plotColData(sce, y="total_features_by_counts", x="seqInfos") + ggtitle("total nb of genes")
 
 plotColData(sce, 
@@ -284,6 +268,27 @@ plotColData(sce,
   scale_y_continuous(limits = c(2.5, 4.1)) +
   geom_hline(yintercept=log10(c(500, 1000, 5000)) , linetype="dashed", color = "darkgray", size=0.5) +
   geom_vline(xintercept = c(4:6), linetype="dotted", color = "black", size=0.5)
+
+dev.off()
+
+##########################################
+# compare tehnical replicates,
+# merge them 
+# or benchmark batch correction methods
+##########################################
+pdfname = paste0(resDir, "/scRNAseq_QCs_cells_filterting.pdf")
+pdf(pdfname, width=18, height = 6)
+par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+
+# change seqInfos in design to label technicalreps 
+#design$seqInfos[which(design$seqInfos=="R7130_HLWTCBGX9_1")] = "R7130_HHG5KBGX9_1_techrep_nexseq"
+#design$seqInfos[which(design$seqInfos=="R7130_CCYTEANXX_4")] = "R7130_HHGHNBGX9_1_techrep_hiseq"
+#design$seqInfos[which(design$seqInfos=="R7133_CD2GTANXX_5")] = "R7130_HHGHNBGX9_1_techrep_hiseq_R7133"
+source("scRNAseq_functions.R")
+
+xx = compare.merge.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"))
+
+compare.merge.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"))
 
 dev.off()
 
