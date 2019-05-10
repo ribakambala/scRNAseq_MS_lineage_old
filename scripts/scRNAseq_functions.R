@@ -154,6 +154,10 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
   
   if(any(is.na(mm))) stop("Missed technical replicates : ", sampleInfos.techRep[which(is.na(mm))], "\n")
   
+  pdfname = paste0(resDir, "/scRNAseq_check_technicalRep.pdf")
+  pdf(pdfname, width=18, height = 6)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
   library(SingleCellExperiment)
   library(scater)
   library(scRNA.seq.funcs)
@@ -297,6 +301,7 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
   
   }
   
+  dev.off()
 }
 
 
@@ -311,6 +316,12 @@ merge.techinical.replicates = function(design, counts,
     techRep = sampleInfos.techRep[[n]]
     mm = match(techRep, unique(design$seqInfos))
     if(any(is.na(mm))) stop("Missed technical replicates : ", sampleInfos.techRep[which(is.na(mm))], "\n")
+    
+    
+    compare.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"))
+    
+    compare.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"))
+    
     
     cat("-- start to merge technical replicates for lanes :", techRep, "\n")
     sels = match(design$seqInfos, techRep)
