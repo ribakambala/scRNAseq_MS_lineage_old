@@ -252,6 +252,7 @@ merge.techinical.replicates = function(design, counts,
                                        sampleInfos.techRep = list(c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"),
                                                                   c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5")))
 {
+  
   for(n in 1:length(sampleInfos.techRep))
   {
     # check if technical replicates can be found
@@ -259,6 +260,7 @@ merge.techinical.replicates = function(design, counts,
     mm = match(techRep, unique(design$seqInfos))
     if(any(is.na(mm))) stop("Missed technical replicates : ", sampleInfos.techRep[which(is.na(mm))], "\n")
     
+    cat("-- start to merge technical replicates for lanes :", techRep, "\n")
     sels = match(design$seqInfos, techRep)
     sels = which(!is.na(sels))
     
@@ -266,17 +268,31 @@ merge.techinical.replicates = function(design, counts,
     counts.keep = counts[, -sels]
     
     design.sels = design[sels, ]
-    counts.sels = counts[sels, ]
+    counts.sels = counts[, sels]
     
     bcs = unique(design.sels$barcodes)
+    
+    design.merged = design.sels[match(bcs, design.sels$barcodes), ]
+    design.merged$seqInfos = paste0(techRep[1], "_merged")
     
     merged = matrix(0, nrow = nrow(counts), ncol = length(bcs))
     for(m in 1:length(techRep))
     {
-      designM = 
-      techM = counts.sels[, which()]
+      jj.trep = which(design.sels$seqInfos == techRep[m])
+      counts.trep = counts.sels[, jj.trep]
+      colnames(counts.trep) = design.sels$barcodes[jj.trep]
+      counts.trep = counts.trep[, match(bcs, colnames(counts.trep))]
+      counts.trep = as.matrix(counts.trep)
+      counts.trep[which(is.na(counts.trep))] = 0
+      merged = merged + counts.trep
     }
+    colnames(merged) = design.merged$samples
+    
+    design = rbind(design.keep, design.merged)
+    counts = cbind(counts.keep, merged)
   }
+  
+  return(list(design = design, counts = counts))
   
 }
 
