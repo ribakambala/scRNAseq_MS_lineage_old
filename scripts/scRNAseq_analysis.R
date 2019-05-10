@@ -24,6 +24,8 @@ Manually.Specify.sampleInfos.4scRNAseq = TRUE
 Aggregate.nf.QCs.plots.in.designMatrix = TRUE
 #design.file = "../exp_design/R6875_sample_infos.xlsx"
 #Use.sampleID.mapSamples = FALSE
+
+
 ##################################################
 ##################################################
 ## Section: Import data first 
@@ -161,37 +163,10 @@ save(aa, design, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_sa
 ##################################################
 load(file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_sampleInfos_QCs_nf_RNA_seq.Rdata'))
 
-##########################################
-# first round cleaning the count table:
-# a) keep only rows for mapped transripts
-# b) map the gene names to the gene symbols
-##########################################
-aa = aa[ grep("^__", aa$gene, invert = TRUE), ] ## remove features that are not well aligned
-
-## load annotation and change the gene names
-annot = read.csv(file = "../../../../annotations/BioMart_WBcel235_noFilters.csv", header = TRUE)
-
-gg.Mt = annot$Gene.name[which(annot$Chromosome.scaffold.name=="MtDNA")]
-gg.ribo = annot$Gene.name[which(annot$Gene.type=="rRNA")]
-  
-ggs = as.character(aa$gene);
-mm = match(aa$gene, annot$Gene.stable.ID)
-jj = which(!is.na(mm)==TRUE & annot$Gene.name[mm] != "");
-ggs[jj] = as.character(annot$Gene.name[mm[jj]]);
-
-counts = aa
-rownames(counts) <- aa[, 1]
-counts <- as.matrix(counts[,-1])
-#celltype <- design$celltypes
-
-ss = apply(counts, 1, sum)
-keep.genes = which(ss>0)
-counts = counts[keep.genes, ]
-ggs = ggs[keep.genes]
-ggs.unique = unique(ggs)
-
-rownames(counts) = ggs
-
+source("scRNAseq_functions.R")
+counts = convertGeneNames.forCountTable(aa)
+gg.Mt = find.particular.geneSet("Mt")
+gg.ribo = find.particular.geneSet("ribo")
 ##########################################
 # compare tehnical replicates,
 # merge them 
@@ -220,6 +195,8 @@ xx = merge.techinical.replicates(design = design[, c(1:6)], counts = counts,
 xx1 = xx$design
 xx2 = xx$counts
 
+design = xx1
+counts = xx2
 
 ##########################################
 # Import SingleCellExperiment and scater packages for the QC and table cleaning
@@ -233,12 +210,6 @@ library(SingleCellExperiment)
 library(scater)
 options(stringsAsFactors = FALSE)
 
-## add or control some new features for design for quality controls
-design$log10_Total = log10(design$total_reads)
-#design$percent_mapped = design$uniquely_mapped/design$T
-design$percent_proteinCoding = design$protein_coding/design$total_reads
-design$percent_rRNA = design$rRNA / design$Total
-
 ## make SCE object and remove genes with zero reads detected
 sce <- SingleCellExperiment(assays = list(counts = counts), 
                             colData = as.data.frame(design), 
@@ -246,7 +217,6 @@ sce <- SingleCellExperiment(assays = list(counts = counts),
 #write.csv(counts(sce), file=paste0(tabDir, "scRNAseq_raw_readCounts", version.analysis, ".csv"), row.names=TRUE)
 keep_feature <- rowSums(counts(sce) > 0) > 0
 sce <- sce[keep_feature, ]
-
 
 #is.spike <- grepl("^ERCC", rownames(sce))
 is.mito <- rownames(sce) %in% gg.Mt;
@@ -266,26 +236,12 @@ pdf(pdfname, width=18, height = 6)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
 # some general statistics for each request and lane
-#cols = c(rep('gray', 2), 'red', 'darkblue', 'darkred', 'blue', 'red')
-plotColData(sce, y = "log10_Total", x = "seqInfos") + ggtitle("total nb of reads")
-plotColData(sce, y="uniquely_mapped_percent", x="seqInfos") + ggtitle("% of uniquely mapped ")
-plotColData(sce, y="percent_assigned", x="seqInfos") + ggtitle("% of assigned")
-plotColData(sce, y="percent_proteinCoding", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
-
 plotColData(sce, y="pct_counts_Ribo", x="seqInfos") + ggtitle("% of rRNA contamination")
 plotColData(sce, y="pct_counts_Mt", x="seqInfos") + ggtitle("% of Mt")
 
 plotColData(sce, y="log10_total_counts", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
 
 plotColData(sce, y="total_features_by_counts", x="seqInfos") + ggtitle("total nb of genes")
-
-plotColData(sce, 
-            x = "log10_Total",
-            y = "uniquely_mapped_percent",
-            #colour_by = "uniquely_mapped_percent",
-            colour_by = "seqInfos",
-            size_by = "pct_counts_Ribo"
-)
 
 plotColData(sce,
             x = "log10_total_counts",
@@ -304,7 +260,7 @@ dev.off()
 ## filter cells with low quality 
 # here we are using the 50,000 for library size and 100 expressed genes as thresholds
 ##########################################
-threshod.total.counts.per.cell = 10^4
+threshod.total.counts.per.cell = 10^5
 threshod.nb.detected.genes.per.cell = 1000;
 #libsize.drop <- isOutlier(sce$total_counts, nmads=3, type="lower", log=TRUE)
 #feature.drop <- isOutlier(sce$total_features, nmads=3, type="lower", log=TRUE)

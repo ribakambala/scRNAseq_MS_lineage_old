@@ -89,6 +89,58 @@ aggrate.nf.QCs = function(dirs.all, modules2cat = c("star", "featureCounts"))
   return(res)
 }
 
+##########################################
+# Convert Ensem ID to gene names
+# a) keep only rows for mapped transripts
+# b) map the gene names to the gene symbols
+##########################################
+convertGeneNames.forCountTable = function(aa, discard.gene.with.zero.reads = TRUE)
+{
+  
+  aa = aa[ grep("^__", aa$gene, invert = TRUE), ] ## remove features that are not well aligned
+  
+  ## load annotation and change the gene names
+  annot = read.csv(file = "../../../../annotations/BioMart_WBcel235_noFilters.csv", header = TRUE)
+  gg.Mt = annot$Gene.name[which(annot$Chromosome.scaffold.name=="MtDNA")]
+  gg.ribo = annot$Gene.name[which(annot$Gene.type=="rRNA")]
+  
+  ggs = as.character(aa$gene);
+  mm = match(aa$gene, annot$Gene.stable.ID)
+  jj = which(!is.na(mm)==TRUE & annot$Gene.name[mm] != "");
+  ggs[jj] = as.character(annot$Gene.name[mm[jj]]);
+  
+  counts = aa
+  rownames(counts) <- aa[, 1]
+  counts <- as.matrix(counts[,-1])
+  
+  if(discard.gene.with.zero.reads){
+    cat("-- discard genes with zero reads --")
+    ss = apply(counts, 1, sum)
+    keep.genes = which(ss>0)
+    counts = counts[keep.genes, ]
+    ggs = ggs[keep.genes]
+    ggs.unique = unique(ggs)
+    
+    rownames(counts) = ggs
+  }
+  
+  return(counts)
+}
+
+find.particular.geneSet = function(geneSet = "Mt")
+{
+  annot = read.csv(file = "../../../../annotations/BioMart_WBcel235_noFilters.csv", header = TRUE)
+  if(geneSet == "Mt"){
+    return(annot$Gene.name[which(annot$Chromosome.scaffold.name=="MtDNA")])
+  }else{
+    if(geneSet == "ribo"){
+      return(annot$Gene.name[which(annot$Gene.type=="rRNA")])
+    }else{
+      stop("no geneSet found for :", geneSet, "\n")
+    }
+  }
+    
+}
 
 ##########################################
 # function for collapse technical replicates in the lane level
