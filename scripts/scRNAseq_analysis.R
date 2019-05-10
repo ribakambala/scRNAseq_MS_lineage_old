@@ -161,6 +161,12 @@ save(aa, design, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_sa
 # Section: Quality control, process and clean the count table for scRNA-seq
 ##################################################
 ##################################################
+library(SingleCellExperiment)
+library(scater)
+library(scRNA.seq.funcs)
+library(scran)
+options(stringsAsFactors = FALSE)
+
 load(file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_sampleInfos_QCs_nf_RNA_seq.Rdata'))
 
 source("scRNAseq_functions.R")
@@ -176,7 +182,7 @@ gg.ribo = find.particular.geneSet("ribo")
 if(Merge.technicalRep){
   
   source("scRNAseq_functions.R")
-  xx = merge.techinical.replicates(design = design[, c(1:6)], counts = counts, 
+  xx = merge.techinical.replicates(design = design, counts = counts, 
                                    sampleInfos.techRep = list(c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"), 
                                                               c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5")))
   xx1 = xx$design

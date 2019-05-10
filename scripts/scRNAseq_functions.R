@@ -146,38 +146,18 @@ find.particular.geneSet = function(geneSet = "Mt")
 # function for collapse technical replicates in the lane level
 # 
 ##########################################
-compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"),
-                                               filter.cell.gene = FALSE, check.correlations = FALSE)
+compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene = FALSE, check.correlations = FALSE)
 {
-  sinfos.uniq = unique(design$seqInfos)
-  mm = match(sampleInfos.techRep, sinfos.uniq)
-  
-  if(any(is.na(mm))) stop("Missed technical replicates : ", sampleInfos.techRep[which(is.na(mm))], "\n")
-  
-  pdfname = paste0(resDir, "/scRNAseq_check_technicalRep.pdf")
-  pdf(pdfname, width=18, height = 6)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-  
-  library(SingleCellExperiment)
-  library(scater)
-  library(scRNA.seq.funcs)
-  library(scran)
-  options(stringsAsFactors = FALSE)
+  sinfos.uniq = unique(design.tr$seqInfos)
   
   ## add some new features for design for quality controls
-  design$log10_Total = log10(design$total_reads)
-  design$percent_rRNA = design$rRNA / design$Total
-  
+  design.tr$log10_Total = log10(design.tr$total_reads)
+  design.tr$percent_rRNA = design.tr$rRNA / design.tr$Total
   
   ## make SCE object and remove genes with zero reads detected
-  sce <- SingleCellExperiment(assays = list(counts = counts), 
-                              colData = as.data.frame(design), 
-                              rowData = data.frame(gene_names = rownames(counts), feature_symbol = rownames(counts)))
-  #write.csv(counts(sce), file=paste0(tabDir, "scRNAseq_raw_readCounts", version.analysis, ".csv"), row.names=TRUE)
-  #keep_feature <- rowSums(counts(sce) > 0) > 0
-  #sce <- sce[keep_feature, ]
-  kk.tech = !is.na(match(design$seqInfos, sampleInfos.techRep))
-  sce = sce[, kk.tech]
+  sce <- SingleCellExperiment(assays = list(counts = counts.tr), 
+                              colData = as.data.frame(design.tr), 
+                              rowData = data.frame(gene_names = rownames(counts.tr), feature_symbol = rownames(counts.tr)))
   
   #is.spike <- grepl("^ERCC", rownames(sce))
   is.mito <- rownames(sce) %in% gg.Mt;
@@ -187,20 +167,20 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
   
   sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito, Ribo=is.ribo))
   
-  head(colnames(colData(sce)), 20)
+  #head(colnames(colData(sce)), 20)
   
   # check some general statistics for each request and lane
   #cols = c(rep('gray', 2), 'red', 'darkblue', 'darkred', 'blue', 'red')
-  plotColData(sce, y = "log10_Total", x = "seqInfos") + ggtitle("total nb of reads")
-  plotColData(sce, y="uniquely_mapped_percent", x="seqInfos") + ggtitle("% of uniquely mapped ")
-  plotColData(sce, y="percent_assigned", x="seqInfos") + ggtitle("% of assigned")
-  plotColData(sce, y="pct_counts_Ribo", x="seqInfos") + ggtitle("% of rRNA contamination")
-  plotColData(sce, y="pct_counts_Mt", x="seqInfos") + ggtitle("% of Mt")
+  ps1 = plotColData(sce, y = "log10_Total", x = "seqInfos") + ggtitle("total nb of reads")
+  ps2 = plotColData(sce, y="uniquely_mapped_percent", x="seqInfos") + ggtitle("% of uniquely mapped ")
+  ps3 = plotColData(sce, y="percent_assigned", x="seqInfos") + ggtitle("% of assigned")
+  ps4 = plotColData(sce, y="pct_counts_Ribo", x="seqInfos") + ggtitle("% of rRNA contamination")
+  ps5 = plotColData(sce, y="pct_counts_Mt", x="seqInfos") + ggtitle("% of Mt")
   
-  plotColData(sce, y="log10_total_counts", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
-  plotColData(sce, y="total_features_by_counts", x="seqInfos") + ggtitle("total nb of genes")
+  ps6 = plotColData(sce, y="log10_total_counts", x="seqInfos") + ggtitle("total nb of reads mapped to transcripts")
+  ps7 = plotColData(sce, y="total_features_by_counts", x="seqInfos") + ggtitle("total nb of genes")
   
-  plotColData(sce,
+  ps8 = plotColData(sce,
               x = "log10_total_counts",
               y = "log10_total_features_by_counts",
               #colour_by = "percent_mapped",
@@ -254,7 +234,7 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
   assay(sce.qc, "logcounts") <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
       
   main = "cpm"
-  scater::plotPCA(
+  ps9 = scater::plotPCA(
     sce.qc[endog_genes, ],
     run_args = list(exprs_values = "logcounts"), 
     size_by = "total_counts",
@@ -264,7 +244,7 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
   
   set.seed(1234567)
   param.perplexity = 10;
-  plotTSNE(
+  ps10 = plotTSNE(
     sce.qc[endog_genes, ],
     run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
     size_by = "total_counts",
@@ -272,7 +252,7 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
     colour_by = "seqInfos"  
   ) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "--", main))
   
-  plotUMAP(
+  ps11 = plotUMAP(
     sce.qc[endog_genes, ],
     run_args = list(exprs_values = "logcounts"), 
     size_by = "total_counts",
@@ -282,6 +262,15 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
   
   ## check the correction of the same cells from different technical replicates
   bcs = unique(sce.qc$barcodes)
+  
+  pdfname = paste0(resDir, "/scRNAseq_check_technicalRep.pdf")
+  pdf(pdfname, width=12, height = 6)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
+  for(kk in 1:11)
+  {
+    eval(parse(text = paste0("plot(ps", kk, ")")))
+  }
   
   if(check.correlations){
     correlations = c()
@@ -302,6 +291,7 @@ compare.techinical.replicates = function(design, counts, sampleInfos.techRep = c
   }
   
   dev.off()
+  
 }
 
 
@@ -317,13 +307,6 @@ merge.techinical.replicates = function(design, counts,
     mm = match(techRep, unique(design$seqInfos))
     if(any(is.na(mm))) stop("Missed technical replicates : ", sampleInfos.techRep[which(is.na(mm))], "\n")
     
-    
-    compare.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"))
-    
-    compare.techinical.replicates(design, counts, sampleInfos.techRep = c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5"))
-    
-    
-    cat("-- start to merge technical replicates for lanes :", techRep, "\n")
     sels = match(design$seqInfos, techRep)
     sels = which(!is.na(sels))
     
@@ -333,12 +316,26 @@ merge.techinical.replicates = function(design, counts,
     design.sels = design[sels, ]
     counts.sels = counts[, sels]
     
+    cat("-- start to compare technical replicates for lanes :", techRep, "\n")
+    
+    compare.techinical.replicates(design = design.sels, counts = counts.sels)
+    
+    cat("-- start to merge technical replicates for lanes :", techRep, "\n")
+    
     bcs = unique(design.sels$barcodes)
     
     design.merged = design.sels[match(bcs, design.sels$barcodes), ]
     design.merged$seqInfos = paste0(techRep[1], "_merged")
     
-    merged = matrix(0, nrow = nrow(counts), ncol = length(bcs))
+    # double chekc the barcode order
+    for(index.bc in 1:length(bcs)){
+      if(bcs[index.bc] != design.merged$barcodes[index.bc]) {
+        cat("barcode order is wrong \n")
+      }
+    }
+    
+    merged = matrix(0, nrow = nrow(counts.sels), ncol = length(bcs))
+    
     for(m in 1:length(techRep))
     {
       jj.trep = which(design.sels$seqInfos == techRep[m])
