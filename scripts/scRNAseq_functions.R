@@ -146,7 +146,7 @@ find.particular.geneSet = function(geneSet = "Mt")
 # function for collapse technical replicates in the lane level
 # 
 ##########################################
-compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene = FALSE, check.correlations = FALSE)
+compare.techinical.replicates = function(design.tr, counts.tr, filter.cells = FALSE, filter.genes = TRUE, check.correlations = TRUE)
 {
   sinfos.uniq = unique(design.tr$seqInfos)
   
@@ -166,8 +166,6 @@ compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene 
   summary(is.ribo)
   
   sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito, Ribo=is.ribo))
-  
-  #head(colnames(colData(sce)), 20)
   
   # check some general statistics for each request and lane
   #cols = c(rep('gray', 2), 'red', 'darkblue', 'darkred', 'blue', 'red')
@@ -192,7 +190,7 @@ compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene 
     geom_vline(xintercept = c(4:6), linetype="dotted", color = "black", size=0.5)
   
   # filter cell and genes
-  if(filter.cell.gene){
+  if(filter.cells){
     threshod.total.counts.per.cell = 10^4
     threshod.nb.detected.genes.per.cell = 1000;
     
@@ -211,10 +209,11 @@ compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene 
     )
     table(sce$use)
     sce = sce[, sce$use]
-    
+  }
+  if(filter.genes){
     num.cells <- nexprs(sce, byrow=TRUE)
     ave.counts <- calcAverage(sce)
-    genes.to.keep <- num.cells > 5 & ave.counts >= 1  & ave.counts <10^6  # detected in >= 2 cells, ave.counts >=5 but not too high
+    genes.to.keep <- num.cells > 5 & ave.counts >= 10  & ave.counts <10^6  # detected in >= 2 cells, ave.counts >=5 but not too high
     summary(genes.to.keep)
     # remove mt and ribo genes
     genes.to.keep = genes.to.keep & ! rownames(sce) %in% gg.Mt & ! rownames(sce) %in% gg.ribo
@@ -224,72 +223,89 @@ compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene 
     
   }
   
-  # select cells having technical replicates and normalize them  
-  sce.qc = sce
   
-  reducedDim(sce.qc) <- NULL
-  endog_genes <- !rowData(sce.qc)$is_feature_control
-  
-  set.seed(1234567)
-  assay(sce.qc, "logcounts") <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
-      
-  main = "cpm"
-  ps9 = scater::plotPCA(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "logcounts"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("PCA -- ", main))
-  
-  set.seed(1234567)
-  param.perplexity = 10;
-  ps10 = plotTSNE(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"  
-  ) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "--", main))
-  
-  ps11 = plotUMAP(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "logcounts"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("UMAP -- ", main))
-  
-  ## check the correction of the same cells from different technical replicates
-  bcs = unique(sce.qc$barcodes)
-  
-  for(kk in 1:11)
+  for(kk in 1:8)
   {
     eval(parse(text = paste0("plot(ps", kk, ")")))
   }
   
-  if(check.correlations){
-    correlations = c()
-    
-    for(n in 1:length(bcs))
-    {
-      # n = 18
-      kk = which(sce.qc$barcodes == bcs[n])
-      xx = as.data.frame(logcounts(sce.qc[,kk[match(sampleInfos.techRep, sce.qc$seqInfos[kk])]]))
-      ss = apply(xx, 1, sum)
-      xx = xx[ss>0, ]
-      #xx = as.data.frame(logcounts(sce.qc[, ]))
-      if(ncol(xx) == 3) correlations = rbind(correlations, c(cor(xx[, 1], xx[, 2]), cor(xx[, 1], xx[, 3]), cor(xx[, 2], xx[, 3])))
-    }
-    pairs(correlations, lower.panel=NULL, upper.panel=panel.fitting)
-    colnames(correlations) = c('rep0.vs.hiseq.rep1', 'rep0.vs.hiseq.rep2', 'hiseq.rep1.vs.hiseq.rep_2')
+  # select cells having technical replicates and normalize them  
+  sce.qc = sce
+  reducedDim(sce.qc) <- NULL
+  endog_genes <- !rowData(sce.qc)$is_feature_control
   
+  
+  Methods.Normalization = c("cpm", "DESeq2", "scran")
+  for(method in Methods.Normalization)
+  {
+    
+    set.seed(1234567)
+    cat('testing normalization method -- ', method, "\n")
+    
+    main = paste0(method, " normalization");
+        
+    if(method == "cpm") { ### cpm
+      assay(sce.qc, "logcounts") <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
+    }
+    
+    if(method == "DESeq2"){
+      source("scRNAseq_functions.R")
+      sizeFactors(sce.qc) = calculate.sizeFactors.DESeq2(counts(sce.qc))
+      sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
+    }
+    
+    if(method == "scran"){
+      ## scran normalization (not working here, because negative scaling factor found)
+      qclust <- quickCluster(sce.qc, min.size = 50)
+      sce.qc <- computeSumFactors(sce.qc, clusters = qclust)
+      sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
+    }
+    
+    ps.norms = scater::plotPCA(
+      sce.qc[endog_genes, ],
+      run_args = list(exprs_values = "logcounts"), 
+      size_by = "total_counts",
+      #size_by = "total_features_by_counts",
+      colour_by = "seqInfos"
+    ) + ggtitle(paste0("PCA --", method))
+    plot(ps.norms)
+    
+    ## check the correction of the same cells from different technical replicates
+    bcs = unique(sce.qc$barcodes)
+    
+    if(check.correlations){
+      correlations = c()
+      
+      #par(mfrow=c(2,3)) 
+      for(n in 1:length(bcs))
+      {
+        # n = 1
+        kk = which(sce.qc$barcodes == bcs[n])
+        xx = as.data.frame(logcounts(sce.qc[, kk[match(sinfos.uniq, sce.qc$seqInfos[kk])]]))
+        ss = apply(xx, 1, sum)
+        xx = xx[ss>0, ]
+        colnames(xx) = paste0(sinfos.uniq, ".", method)
+        
+        if(n <= 10) pairs(xx, lower.panel=NULL, upper.panel=panel.fitting)
+        
+        if(length(sinfos.uniq) == 2) correlations = c(correlations, cor(xx[,1], xx[, 2]))
+        if(length(sinfos.uniq) == 3) correlations = rbind(correlations, c(cor(xx[, 1], xx[, 2]), cor(xx[, 1], xx[, 3]), cor(xx[, 2], xx[, 3])))
+      }
+      
+      if(length(sinfos.uniq) == 2) {
+        names(correlations) = paste0("cor_", sinfos.uniq, collapse = "_")
+        hist(correlations, breaks = 10)
+      }
+      if(length(sinfos.uniq) == 3) {
+        colnames(correlations) = paste0("cor_", sinfos.uniq[c(1,2,3)], sinfos.uniq[c(2,3,1)])
+        pairs(correlations, lower.panel=NULL, upper.panel=panel.fitting)
+      }
+      #colnames(correlations) = c('rep0.vs.hiseq.rep1', 'rep0.vs.hiseq.rep2', 'hiseq.rep1.vs.hiseq.rep_2')
+    }
+    
   }
   
-  #dev.off()
-  
 }
-
 
 merge.techinical.replicates = function(design, counts, 
                                        sampleInfos.techRep = list(c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"),
@@ -314,7 +330,7 @@ merge.techinical.replicates = function(design, counts,
     
     cat("-- start to compare technical replicates for lanes :", techRep, "\n")
     
-    compare.techinical.replicates(design = design.sels, counts = counts.sels)
+    compare.techinical.replicates(design.tr=design.sels, counts.tr=counts.sels)
     
     cat("-- start to merge technical replicates for lanes :", techRep, "\n")
     
@@ -372,7 +388,7 @@ panel.cor <- function(x, y, digits=2, prefix="", cex.cor)
   text(.8, .8, Signif, cex=cex, col=2) 
 }
 
-panel.fitting = function (x, y, bg = NA, pch = par("pch"), cex = 0.2, col='black') 
+panel.fitting = function (x, y, bg = NA, pch = par("pch"), cex = 0.3, col='black') 
 {
   #x = yy[,1];y=yy[,2];
   #kk = which(x>0 & y>0); x=x[kk];y=y[kk]
