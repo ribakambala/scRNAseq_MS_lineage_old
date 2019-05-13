@@ -263,10 +263,6 @@ compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene 
   ## check the correction of the same cells from different technical replicates
   bcs = unique(sce.qc$barcodes)
   
-  pdfname = paste0(resDir, "/scRNAseq_check_technicalRep.pdf")
-  pdf(pdfname, width=12, height = 6)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-  
   for(kk in 1:11)
   {
     eval(parse(text = paste0("plot(ps", kk, ")")))
@@ -290,7 +286,7 @@ compare.techinical.replicates = function(design.tr, counts.tr, filter.cell.gene 
   
   }
   
-  dev.off()
+  #dev.off()
   
 }
 

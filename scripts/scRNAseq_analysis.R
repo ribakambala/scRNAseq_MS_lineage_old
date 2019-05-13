@@ -182,9 +182,15 @@ gg.ribo = find.particular.geneSet("ribo")
 if(Merge.technicalRep){
   
   source("scRNAseq_functions.R")
+  pdfname = paste0(resDir, "/scRNAseq_check_technicalRep.pdf")
+  pdf(pdfname, width=12, height = 6)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
   xx = merge.techinical.replicates(design = design, counts = counts, 
                                    sampleInfos.techRep = list(c("R7130_HHG5KBGX9_1", "R7130_HLWTCBGX9_1"), 
                                                               c("R7130_HHGHNBGX9_1", "R7130_CCYTEANXX_4", "R7133_CD2GTANXX_5")))
+  dev.off()
+  
   xx1 = xx$design
   xx2 = xx$counts
   
@@ -198,7 +204,7 @@ if(Merge.technicalRep){
 # several steps will be proceded:
 # 1) general overview of data quality: sequencing depth, mapping rate, assignment rate, rRAN codamination for each sequencing lane
 # 2) clean the cells 
-# 3) clean genes 
+# 3) clean genes
 ##########################################
 source("scRNAseq_functions.R")
 library(SingleCellExperiment)
