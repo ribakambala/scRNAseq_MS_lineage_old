@@ -197,6 +197,8 @@ if(Merge.technicalRep){
   design = xx1
   counts = xx2
   
+  save(design, counts, file=paste0(RdataDir, version.DATA, '_RAW_Read_Counts_design_technicalRepMerged.Rdata'))
+
 }
 
 ##########################################
