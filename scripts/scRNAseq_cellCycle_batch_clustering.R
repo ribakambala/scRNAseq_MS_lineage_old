@@ -13,6 +13,18 @@
 # http://bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/de.html#2_blocking_on_uninteresting_factors_of_variation)
 ########################################################
 ########################################################
+version.DATA = 'R6875_R7116_R7130_R7130redo_R7133_scRNA_v1'
+version.analysis =  paste0(version.DATA, '_20190506')
+
+dataDir = paste0("../data/")
+resDir = paste0("../results/", version.analysis)
+tabDir = paste0("../results/", version.analysis, "/tables/")
+RdataDir = paste0("../results/", version.analysis, "/Rdata/")
+if(!dir.exists(resDir)){dir.create(resDir)}
+if(!dir.exists(tabDir)){dir.create(tabDir)}
+if(!dir.exists(RdataDir)){dir.create(RdataDir)}
+
+load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
 
 ##########################################
 # remove the cell cycle confounder 

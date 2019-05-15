@@ -10,9 +10,7 @@
 version.DATA = 'R6875_R7116_R7130_R7130redo_R7133_scRNA_v1'
 version.analysis =  paste0(version.DATA, '_20190506')
 
-
 dataDir = paste0("../data/")
-
 resDir = paste0("../results/", version.analysis)
 tabDir = paste0("../results/", version.analysis, "/tables/")
 RdataDir = paste0("../results/", version.analysis, "/Rdata/")
@@ -317,7 +315,6 @@ if(Manual.vs.outlier.filtering){
 sce = sce[, sce$use]
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_filtered_SCE.Rdata'))
 
-
 ####################
 ## filter lowly expressed (and probably too highly expressed genes)
 ####################
@@ -356,133 +353,57 @@ save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_SCE.Rd
 
 ########################################################
 ########################################################
-# Section : normalization and confonding factors,
-# batch correction
+# Section : scRNA-seq data normalization 
 # codes original from Hemberg's course
 # https://hemberg-lab.github.io/scRNA.seq.course/cleaning-the-expression-matrix.html#data-visualization
-##########
 # Among all normalization methods, DESeq2 and scran normalization will be used
 # consider seurat for UMI counts, but here we are just working on the read counts
-########################################################
-########################################################
-##################################
-# scRNA-seq data normalization 
 # Many normalization have been proposed
 # Here we test main two methods: TMM from edgeR or from DESeq2
 # and the one from scran
 # the PCA and some other plots were used to assess the normalization
-##################################
+# After testing different normalization using technical replicates, cpm, DESeq2 and scran yield similar results and scran is slightly better 
+# than DESeq2 which is better than cpm 
+# !!! parameters of scran normalization required extra care; double check the size factor from scran vs library size
+# the current parameters for scran: 
+# qclust <- quickCluster(sce.qc, min.size = 100, method = 'igraph')
+# sce.qc <- computeSumFactors(sce.qc, clusters = qclust)
+########################################################
+########################################################
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_SCE.Rdata'))
 library(scRNA.seq.funcs)
 library(scater)
 library(scran)
 options(stringsAsFactors = FALSE)
 
-sce.qc = sce;
+Normalization.Testing = TRUE
+
 reducedDim(sce) <- NULL
 endog_genes <- !rowData(sce)$is_feature_control
 
-Methods.Normalization = c("cpm", "DESeq2", "UQ", "scran", "downsample")
-
-#Methods.Normalization = "DESeq2" 
-
-for(method in Methods.Normalization)
-{
+if(Normalization.Testing){
+  source("scRNAseq_functions.R")
   
-  # method = Methods.Normalization[4]
-  set.seed(1234567)
-  
-  cat('normalization method -- ', method, "\n")
-  
-  pdfname = paste0(resDir, "/scRNAseq_filtered_normalization_testing_", method, ".pdf")
+  pdfname = paste0(resDir, "/scRNAseq_filtered_normalization_testing.pdf")
   pdf(pdfname, width=14, height = 8)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
-  main = paste0(method, " normalization");
-  if(method == "raw") { # raw log counts
-    assay(sce.qc, "logcounts") <- log2(counts(sce.qc) + 1)
-  }
+  test.normalization(sce, Methods.Normalization = c("cpm", "DESeq2", "scran"), min.size = 100)
   
-  cat("start to normalize the data ---\n")
-  
-  if(method == "cpm") { ### cpm
-    assay(sce.qc, "logcounts") <- log2(calculateCPM(sce.qc, use_size_factors = FALSE) + 1)
-  }
-  if(method == "UQ"){
-    source("scRNAseq_functions.R")
-    logcounts(sce.qc) <- log2(cal_uq_Hemberg(counts(sce.qc)) + 1)
-  }
-  
-  if(method == "DESeq2"){
-    source("scRNAseq_functions.R")
-    sizeFactors(sce.qc) = calculate.sizeFactors.DESeq2(counts(sce.qc))
-    sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
-  }
-  if(method == "downsample") {
-    assay(sce.qc, "logcounts") <- log2(Down_Sample_Matrix(counts(sce.qc)) + 1)
-  }
-  
-  if(method == "scran"){
-    ## scran normalization (not working here, because negative scaling factor found)
-    qclust <- quickCluster(sce.qc, min.size = 30)
-    sce.qc <- computeSumFactors(sce.qc, sizes = 15, clusters = qclust)
-    sce.qc <- normalize(sce.qc, exprs_values = "counts", return_log = TRUE)
-  }
-  
-  if(method == "TMM"|method == "DESeq2"|method == "UQ"|method == "scran"){
-    summary(sizeFactors(sce.qc))
-    range(sizeFactors(sce.qc))
-    
-    plot(sce.qc$total_counts/1e6, sizeFactors(sce.qc), log="xy", main = paste0(method), 
-         xlab="Library size (millions)", ylab="Size factor",
-         pch=16)
-    #legend("bottomright", col=c("black"), pch=16, cex=1.2, legend = "size factor from scran vs total library size")
-  }
-  
-  scater::plotPCA(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "logcounts"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("PCA -- ", main))
-  
-  plotRLE(
-    sce.qc[endog_genes, ],
-    exprs_values = "logcounts", 
-    exprs_logged = TRUE,
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("RLE -- ", main))
-  
-  param.perplexity = 10;
-  plotTSNE(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "logcounts", perplexity = param.perplexity), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"  
-  ) + ggtitle(paste0("tSNE - perplexity = ", param.perplexity, "--", main))
- 
-  plotUMAP(
-    sce.qc[endog_genes, ],
-    run_args = list(exprs_values = "logcounts"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("UMAP -- ", main))
-      
   dev.off()
-  
 }
 
-## select normalization method and save the normalized sce object
+##########################################
+# select normalization method: scran
+##########################################
 set.seed(1000)    
-#qclust <- quickCluster(sce.qc, min.size = 30)
-clusters <- quickCluster(sce, method="igraph", min.mean=0.1)
+clusters <- quickCluster(sce, min.size = 100, method="igraph")
 table(clusters)
 
-sce <- computeSumFactors(sce, min.mean=0.1, clusters = clusters)
+sce <- computeSumFactors(sce, clusters = clusters)
 sce <- normalize(sce, exprs_values = "counts", return_log = TRUE)
 
-#sce = sce.qc;
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+
+
+
