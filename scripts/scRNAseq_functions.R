@@ -554,6 +554,43 @@ test.normalization = function(sce, Methods.Normalization = c("cpm", "DESeq2", "s
 
 ########################################################
 ########################################################
+# Section : funcitons for cell cycle scoring and correction
+#  
+########################################################
+########################################################
+find.cellcycle.markers = function()
+{
+  # test the code from https://github.com/hbc/macrae_ghazizadeh_zebrafish_heart_sc/blob/master/seurat_cluster/seurat_cluster_adapted_WT.Rmd
+  # unfornately it does not work, because several pacakges can not be properly installed
+  Test.query.cellCycle.markers = FALSE
+  if(Test.query.cellCycle.markers){
+    require(plotly)
+    require(remotes)
+    annot <- basejump::annotable("Danio rerio") %>% 
+      dplyr::select(c(ensgene,symbol)) %>% 
+      dplyr::mutate(symbol = toupper(symbol)) 
+    cell_cycle_markers <- bcbioSingleCell::cellCycleMarkers[[camel("mus musculus")]] %>% 
+      dplyr::mutate(symbol = toupper(symbol)) %>% dplyr::inner_join(annot,by = "symbol") %>% 
+      dplyr::select(-c(ensgene.x)) %>% dplyr::rename(ensgene = ensgene.y)
+    stopifnot(is.data.frame(cell_cycle_markers))
+    markdownHeader("S phase markers", level = 3)
+    s_genes <- cell_cycle_markers %>%
+      filter(phase == "S") %>%
+      pull("ensgene")
+    print(s_genes)
+    markdownHeader("G2/M phase markers", level = 3)
+    g2m_genes <- cell_cycle_markers %>%
+      filter(phase == "G2/M") %>%
+      pull("ensgene")
+    print(g2m_genes)
+    saveData(cell_cycle_markers, s_genes, g2m_genes, dir = data_dir)
+  }
+  
+}
+
+
+########################################################
+########################################################
 # Section :
 # test code and not used anymore 
 ########################################################
