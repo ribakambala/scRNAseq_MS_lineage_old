@@ -26,56 +26,18 @@ if(!dir.exists(RdataDir)){dir.create(RdataDir)}
 
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
 
-cellCycle.correction.using.scran = FALSE
-cellCycle.correction.using.Seurat = FALSE
-cellCycle.correction.using.scran = FALSE
+correct.cellCycle = TRUE
+
 ##########################################
 # remove the cell cycle confounder 
 # we need to train the cells to identify the cell cycle phase
 # this could be more complicated than expected
 ##########################################
-if(cellCycle.correction.using.scran){
-  set.seed(100)
-  library(scran)
-  mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", 
-                                  package="scran"))
-  assignments <- cyclone(sce, mm.pairs, gene.names=rowData(sce)$ENSEMBL)
-  plot(assignments$score$G1, assignments$score$G2M, 
-       xlab="G1 score", ylab="G2/M score", pch=16)
-  sce$phases <- assignments$phases
-  table(sce$phases)
-}
-
-if(cellCycle.correction.using.Seurat){
-  library(scater)
-  # install loomR from GitHub using the remotes package remotes::install_github(repo = 'mojaveazure/loomR', ref = 'develop')
-  library(loomR)
-  library(Seurat)
-  seurat = as.Seurat(sce, counts = "counts", data = "logcounts")
-  detach("package:scater", unload=TRUE)
-
-  seurat <- FindVariableFeatures(seurat, selection.method = "vst")
-  # Identify the 10 most highly variable genes
-  top10 <- head(VariableFeatures(seurat), 25)
-  plot1 <- VariableFeaturePlot(seurat)
-  plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
-  CombinePlots(plots = list(plot1, plot2))
-  
-  seurat <- ScaleData(seurat, features = rownames(seurat), model.use = "linear")
-  seurat <- RunPCA(seurat, features = VariableFeatures(seurat), ndims.print = 6:10, nfeatures.print = 10)
-  
-  DimHeatmap(seurat, dims = c(1: 4))
-  
+if(correct.cellCycle){
   source("scRNAseq_functions.R")
-  cc.genes = find.cellcycle.markers()
-  s.genes = c("cdk-4", "evl-18") # from GO:1901987 http://amigo1.geneontology.org/cgi-bin/amigo/term-assoc.cgi?term=GO:1902808&speciesdb=all&taxid=6239
-  g2m.genes = # GO:1902751
-  seurat <- CellCycleScoring(seurat, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
-  
-  # view cell cycle scores and phase assignments
-  head(marrow[[]])
-  
+  xx = cellCycle.correction(sce, method = "scLVM")
 }
+
 
 ##########################################
 # here to prepare the inputs for MNN in scran 
