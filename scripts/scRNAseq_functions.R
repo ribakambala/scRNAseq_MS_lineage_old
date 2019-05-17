@@ -630,6 +630,89 @@ cellCycle.correction = function(sce, method = "scLVM")
     
     # view cell cycle scores and phase assignments
     head(marrow[[]])
+    
+    
+    ##########################################
+    # similar to source code for cellCycle.scoring function from Seurat
+    # https://github.com/ChristophH/in-lineage/blob/master/R/lib.R
+    ##########################################
+    library('Matrix')
+    library('parallel')
+    library('MASS')
+    library('diffusionMap')
+    library('FNN')
+    library('igraph')
+    library('princurve')
+    library('ggplot2')
+    library('inline')
+    library('gplots')
+    
+    # for cell cycle score
+    
+    get.bg.lists <- function(goi, N, expr.bin) {
+      res <- list()
+      goi.bin.tab <- table(expr.bin[goi])
+      for (i in 1:N) {
+        res[[i]] <- unlist(lapply(names(goi.bin.tab), function(b) {
+          sel <- which(expr.bin == as.numeric(b) & !(names(expr.bin) %in% goi))
+          sample(names(expr.bin)[sel], goi.bin.tab[b])
+        }))
+      }
+      return(res)
+    }
+    
+    enr.score <- function(expr, goi, bg.lst) {
+      goi.mean <- apply(expr[goi, ], 2, mean)
+      bg.mean <- sapply(1:length(bg.lst), function(i) apply(expr[bg.lst[[i]], ], 2, mean))
+      return((goi.mean - apply(bg.mean, 1, mean)) / apply(bg.mean, 1, sd))
+    }
+    
+    
+    get.cc.score <- function(cm, N=100, seed=42, 
+                             s.gene.file='./annotation/s_genes.txt',
+                             g2m.gene.file='./annotation/g2m_genes.txt') {
+      set.seed(seed)
+      cat('get.cc.score, ')
+      cat('number of random background gene sets set to', N, '\n')
+      
+      min.cells <- 5
+      
+      cells.mols <- apply(cm, 2, sum)
+      gene.cells <- apply(cm>0, 1, sum)
+      cm <- cm[gene.cells >= min.cells, ]
+      
+      gene.mean <- apply(cm, 1, mean)
+      
+      breaks <- unique(quantile(log10(gene.mean), probs = seq(0,1, length.out = 50)))
+      gene.bin <- cut(log10(gene.mean), breaks = breaks, labels = FALSE)
+      names(gene.bin) <- rownames(cm)
+      gene.bin[is.na(gene.bin)] <- 0
+      
+      regev.s.genes <- read.table(file=s.gene.file, header=FALSE, stringsAsFactors=FALSE)$V1
+      regev.g2m.genes <- read.table(file=g2m.gene.file, header=FALSE, stringsAsFactors=FALSE)$V1
+      
+      goi.lst <- list('S'=rownames(cm)[!is.na(match(toupper(rownames(cm)), regev.s.genes))],
+                      'G2M'=rownames(cm)[!is.na(match(toupper(rownames(cm)), regev.g2m.genes))])
+      
+      n <- min(40, min(sapply(goi.lst, length)))
+      goi.lst <- lapply(goi.lst, function(x) x[order(gene.mean[x], decreasing = TRUE)[1:n]])
+      
+      bg.lst <- list('S'=get.bg.lists(goi.lst[['S']], N, gene.bin),
+                     'G2M'=get.bg.lists(goi.lst[['G2M']], N, gene.bin))
+      
+      all.genes <- sort(unique(c(unlist(goi.lst, use.names=FALSE), unlist(bg.lst, use.names=FALSE))))
+      
+      expr <- log10(cm[all.genes, ]+1)
+      
+      s.score <- enr.score(expr, goi.lst[['S']], bg.lst[['S']])
+      g2m.score <- enr.score(expr, goi.lst[['G2M']], bg.lst[['G2M']])
+      
+      phase <- as.numeric(g2m.score > 2 & s.score <= 2)
+      phase[g2m.score <= 2 & s.score > 2] <- -1
+      
+      return(data.frame(score=s.score-g2m.score, s.score, g2m.score, phase))
+    }
+    
   }
   
   if(method == "scLVM"){
