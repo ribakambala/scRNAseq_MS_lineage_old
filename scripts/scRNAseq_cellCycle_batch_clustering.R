@@ -35,7 +35,8 @@ correct.cellCycle = TRUE
 ##########################################
 if(correct.cellCycle){
   source("scRNAseq_functions.R")
-  xx = cellCycle.correction(sce, method = "scLVM")
+  xx = cellCycle.correction(sce, method = "seurat")
+  
 }
 
 
