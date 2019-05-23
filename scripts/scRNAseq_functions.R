@@ -558,6 +558,46 @@ test.normalization = function(sce, Methods.Normalization = c("cpm", "DESeq2", "s
 #  
 ########################################################
 ########################################################
+find.cc.markers.homologues = function()
+{
+  detach("package:Seurat", unload=TRUE)
+  require(Seurat)
+  #s.genes = c("cdk-4", "evl-18") # from GO:1901987 http://amigo1.geneontology.org/cgi-bin/amigo/term-assoc.cgi?term=GO:1902808&speciesdb=all&taxid=6239
+  #g2m.genes = xx # GO:1902751
+  # A list of cell cycle markers, from Tirosh et al, 2015, is loaded with Seurat.  We can
+  # segregate this list into markers of G2/M phase and markers of S phase
+  homologues = read.delim("../../../../annotations/cellCycle_genes_worm/BioMart_worm_human_homologe.txt", sep = "\t",
+                          header = TRUE)
+  #homologues = homologues[which(homologues$Human.orthology.confidence..0.low..1.high.==1), ]
+  s.genes <- cc.genes$s.genes
+  g2m.genes <- cc.genes$g2m.genes
+  
+  s.genes = homologues$Gene.name[match(s.genes, homologues$Human.gene.name)]
+  g2m.genes = homologues$Gene.name[match(g2m.genes, homologues$Human.gene.name)]
+  s.genes = s.genes[which(!is.na(s.genes))]
+  g2m.genes = g2m.genes[which(!is.na(g2m.genes))]
+  
+  c3.genes = list(s.genes = s.genes, g2m.genes = g2m.genes)
+  return(c3.genes)
+}
+
+find.cc.markers.GO = function()
+{
+  s.genes = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_dnasynthesis.txt", 
+                       sep = "\t", header = FALSE)
+  gm1 = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_G2Mphase.txt", 
+                   sep = "\t", header = FALSE)
+  gm2 = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_Mphase.txt", 
+                   sep = "\t", header = FALSE)
+  gm3 = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_G2phase.txt", 
+                   sep = "\t", header = FALSE)
+  s.genes = unique(s.genes[, 3])
+  g2m.genes = c(unique(as.character(gm1[,3])), unique(as.character(gm2[, 3])), unique(as.character(gm3[, 3])))
+  
+  c3.genes = list(s.genes = s.genes, g2m.genes = g2m.genes)
+  return(c3.genes)
+}
+  
 find.cellcycle.markers = function(list.sel = 'homologues')
 {
   ##########################################
@@ -565,49 +605,22 @@ find.cellcycle.markers = function(list.sel = 'homologues')
   # 1st method): using homologue between human and c. elegans
   # 2nd method): find a list of 
   ##########################################
-  Test.query.cellCycle.markers = FALSE
-  if(list.sel == 'homologues'){
-    detach("package:Seurat", unload=TRUE)
-    require(Seurat)
-    #s.genes = c("cdk-4", "evl-18") # from GO:1901987 http://amigo1.geneontology.org/cgi-bin/amigo/term-assoc.cgi?term=GO:1902808&speciesdb=all&taxid=6239
-    #g2m.genes = xx # GO:1902751
-    # A list of cell cycle markers, from Tirosh et al, 2015, is loaded with Seurat.  We can
-    # segregate this list into markers of G2/M phase and markers of S phase
-    homologues = read.delim("../../../../annotations/cellCycle_genes_worm/BioMart_worm_human_homologe.txt", sep = "\t",
-                            header = TRUE)
-    #homologues = homologues[which(homologues$Human.orthology.confidence..0.low..1.high.==1), ]
-    s.genes <- cc.genes$s.genes
-    g2m.genes <- cc.genes$g2m.genes
-    
-    s.genes = homologues$Gene.name[match(s.genes, homologues$Human.gene.name)]
-    g2m.genes = homologues$Gene.name[match(g2m.genes, homologues$Human.gene.name)]
-    s.genes = s.genes[which(!is.na(s.genes))]
-    g2m.genes = g2m.genes[which(!is.na(g2m.genes))]
-    
-    # manually add genes from wormbook http://www.wormbook.org/chapters/www_cellcyclereguln/cellcyclereguln.html
-    #s.genes = c(as.character(s.genes), c("cye-1")
-    
-  }
-  if(list.sel == "curated"){
-    s.genes = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_dnasynthesis.txt", 
-                       sep = "\t", header = FALSE)
-    gm1 = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_G2Mphase.txt", 
-                        sep = "\t", header = FALSE)
-    gm2 = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_Mphase.txt", 
-                     sep = "\t", header = FALSE)
-    gm3 = read.delim("../../../../annotations/cellCycle_genes_worm/GO-0006260_worm_G2phase.txt", 
-                     sep = "\t", header = FALSE)
-    s.genes = unique(s.genes[, 3])
-    s.genes = c(as.character(s.genes), c('cye-1', 'cya-1', 'evl-18'))
-    
-    g2m.genes = c(unique(as.character(gm1[,3])), unique(as.character(gm2[, 3])), unique(as.character(gm3[, 3])))
-    
-    g2m.genes = unique(c(g2m.genes, c('cdk-1', 'mat-1', 'mat-2', 'mat-3', 'emb-27', 'emb-30', 'mdf-1', 'san-1')))
-  }
-
+  if(list.sel == 'homologues') c3.genes = find.cc.markers.homologues() 
+  if(list.sel == "curated") c3.genes = find.cc.markers.GO()
+  s.genes = c3.genes$s.genes
+  g2m.genes = c3.genes$g2m.genes
+  
+  # manually add genes from wormbook http://www.wormbook.org/chapters/www_cellcyclereguln/cellcyclereguln.html
+  #s.genes = c(as.character(s.genes), c("cye-1")
+  s.genes = unique(c(as.character(s.genes), c('cye-1', 'cya-1', 'evl-18')))
+  g2m.genes = unique(c(as.character(g2m.genes), c('cdk-1', 'mat-1', 'mat-2', 'mat-3', 'emb-27', 'emb-30', 'mdf-1', 'san-1')))
+  
+  c3.genes = list(s.genes = s.genes, g2m.genes = g2m.genes)
+  return(c3.genes)
   
   # test the code from https://github.com/hbc/macrae_ghazizadeh_zebrafish_heart_sc/blob/master/seurat_cluster/seurat_cluster_adapted_WT.Rmd
   # unfornately it does not work, because several pacakges can not be properly installed
+  Test.query.cellCycle.markers = FALSE
   if(Test.query.cellCycle.markers){
     require(plotly)
     require(remotes)
@@ -630,9 +643,6 @@ find.cellcycle.markers = function(list.sel = 'homologues')
     print(g2m_genes)
     saveData(cell_cycle_markers, s_genes, g2m_genes, dir = data_dir)
   }
-  
-  c3.genes = list(s.genes = s.genes, g2m.genes = g2m.genes)
-  return(c3.genes)
   
 }
 
@@ -659,7 +669,7 @@ cellCycle.correction = function(sce, method = "seurat")
     seurat = as.Seurat(sce, counts = "counts", data = "logcounts")
     detach("package:scater", unload=TRUE)
     
-    seurat <- FindVariableFeatures(seurat, selection.method = "vst")
+    seurat <- FindVariableFeatures(seurat, selection.method = "vst", nfeatures = 1000)
     # Identify the 10 most highly variable genes
     top10 <- head(VariableFeatures(seurat), 25)
     plot1 <- VariableFeaturePlot(seurat)
@@ -669,22 +679,71 @@ cellCycle.correction = function(sce, method = "seurat")
     seurat <- ScaleData(seurat, features = rownames(seurat), model.use = "linear")
     seurat <- RunPCA(seurat, features = VariableFeatures(seurat), ndims.print = 6:10, nfeatures.print = 10)
     
+    DimPlot(seurat, reduction = "pca")
     DimHeatmap(seurat, dims = c(8, 10))
     
     source("scRNAseq_functions.R")
-    c3.genes = find.cellcycle.markers(list.sel = 'curated')
+    c3.genes = find.cellcycle.markers(list.sel = "homologues")
     
     s.genes <- c3.genes$s.genes
     g2m.genes <- c3.genes$g2m.genes 
+    s.genes = s.genes[which(!is.na(match(s.genes, rownames(seurat))))]
+    g2m.genes = g2m.genes[which(!is.na(match(g2m.genes, rownames(seurat))))]
+    
     seurat <- CellCycleScoring(seurat, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
     
     # view cell cycle scores and phase assignments
     # head(seurat[[]])
     
     RidgePlot(seurat, features = c("cdk-1", "cdk-4", "cyd-1", "cye-1", "cya-1", "wee-1.3"), ncol = 2)
+    seurat <- RunPCA(seurat, features = VariableFeatures(seurat))
+    p0 = DimPlot(seurat)
     
     seurat <- RunPCA(seurat, features = c(as.character(s.genes), as.character(g2m.genes)))
     DimPlot(seurat)
+    
+    # regress out the cell cycle
+    seurat1 <- ScaleData(seurat, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat))
+        
+    seurat1 <- RunPCA(seurat1, features = VariableFeatures(seurat1), nfeatures.print = 10)
+    p1 = DimPlot(seurat1)
+    
+    # When running a PCA on only cell cycle genes, cells no longer separate by cell-cycle phase
+    seurat1 <- RunPCA(seurat1, features = c(s.genes, g2m.genes))
+    DimPlot(seurat1)
+    
+    # regressing out the difference between the G2M and S phase scores
+    seurat$CC.Difference <- seurat$S.Score - seurat$G2M.Score
+    seurat2 <- ScaleData(seurat, vars.to.regress = "CC.Difference", features = rownames(seurat))
+    
+    # cell cycle effects strongly mitigated in PCA
+    seurat2 <- RunPCA(seurat2, features = VariableFeatures(seurat2), nfeatures.print = 10)
+    p2 = DimPlot(seurat2)
+    
+     
+    # when running a PCA on cell cycle genes, actively proliferating cells remain distinct from G1
+    # cells however, within actively proliferating cells, G2M and S phase cells group together
+    seurat2 <- RunPCA(seurat2, features = c(s.genes, g2m.genes))
+    DimPlot(seurat2)
+    
+    # save cell cycle scoring and corrected matrix
+    library(scater)
+    sce$S.Score = seurat$S.Score
+    sce$G2M.Score = seurat$G2M.Score
+    sce$Phase = seurat$Phase
+    #sce$Phase.GO = seurat$old.ident
+    sce$CC.Difference = seurat$CC.Difference
+    
+    xx = as.data.frame(seurat@assays$RNA@scale.data); rownames(xx) = rownames(sce)
+    assay(sce, "logcounts_seurat") <- xx
+    xx = as.data.frame(seurat1@assays$RNA@scale.data); rownames(xx) = rownames(sce)
+    assay(sce, "logcounts_seurat_cellcycleCorrected") <- xx
+    xx = as.data.frame(seurat2@assays$RNA@scale.data); rownames(xx) = rownames(sce)
+    assay(sce, "logcounts_seurat_SG2MCorrected") <- xx
+    
+    save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
+    
+    return(sce)
     
     ##########################################
     # a peek of source code for cellCycle.scoring function from Seurat
@@ -768,7 +827,6 @@ cellCycle.correction = function(sce, method = "seurat")
         return(data.frame(score=s.score-g2m.score, s.score, g2m.score, phase))
       }
     }
-  
     
   }
   
