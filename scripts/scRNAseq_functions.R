@@ -835,25 +835,30 @@ cellCycle.correction = function(sce, method = "seurat")
     ##########################################
     # select the python verson to use for Rstudio
     # https://cran.r-project.org/web/packages/reticulate/vignettes/versions.html
+    # still does not work at the end
+    # we change the strategy: prepare the tables and run scLVM in the conda version
     ##########################################
-    system("python --version")
-    system("which python")
+    # system("python --version")
+    # system("which python")
+    # 
+    # library(reticulate)
+    # use_python("/Users/jiwang/anaconda3/envs/scLVM/bin/python")
+    # #use_condaenv(condaenv = "scLVM", conda = "/Users/jiwang/anaconda3/condabin/conda", required = TRUE)
+    # py_config()
+    # 
+    # system("python --version")
+    # system("which python")
+    # 
+    # Sys.setenv(PATH = paste("/Users/jiwang/anaconda3/envs/scLVM/bin", Sys.getenv("PATH"),sep=":"))
     
-    library(reticulate)
-    use_python("/Users/jiwang/anaconda3/envs/scLVM/bin/python")
-    #use_condaenv(condaenv = "scLVM", conda = "/Users/jiwang/anaconda3/condabin/conda", required = TRUE)
-    py_config()
+    #install.packages("rPython", type = "source")
+    #install.packages("/Users/jiwang/src_packages/scLVM_0.99.3.tar.gz", repos = NULL, type="source")
     
-    system("python --version")
-    system("which python")
-    
-    Sys.setenv(PATH = paste("/Users/jiwang/anaconda3/envs/scLVM/bin", Sys.getenv("PATH"),sep=":"))
-    install.packages("rPython", type = "source")
-    install.packages("/Users/jiwang/src_packages/scLVM_0.99.3.tar.gz", repos = NULL, type="source")
-    
-    require(rPython)
-    #python.exec("import sys; print(sys.version)")
-    
+    ##########################################
+    # example code from scLVM R tutorial
+    # https://github.com/PMBio/scLVM/blob/master/R/tutorials/scLVM_vignette.Rmd
+    ##########################################
+    library(rPython)
     library(genefilter)
     library(statmod)
     require(ggplot2)
@@ -866,8 +871,8 @@ cellCycle.correction = function(sce, method = "seurat")
     
     data(data_Tcells)
     help(data_Tcells)
-    
-    dataMouse[ 1:5, 1:4 ]
+
+    #dataMouse[ 1:5, 1:4 ]
     geneTypes <- factor( c( ENSM="ENSM", ERCC="ERCC" )[
       substr( rownames(dataMouse), 1, 4 ) ] )
     #2. calculate normalisation for counts
@@ -881,36 +886,58 @@ cellCycle.correction = function(sce, method = "seurat")
     nCountsERCC <- t( t(countsERCC) / sfERCC )
     nCountsMmus <- t( t(countsMmus) / sfERCC )
     
-    techNoise = fitTechnicalNoise(nCountsMmus,nCountsERCC=nCountsERCC, fit_type = 'counts')  
-    
-    techNoiseLogFit = fitTechnicalNoise(nCountsMmus, fit_type = 'log', use_ERCC = FALSE, plot=FALSE) 
-    techNoiseLogVarFit = fitTechnicalNoise(nCountsMmus, fit_type = 'logvar', use_ERCC = FALSE, plot=FALSE) 
+    countsMmus = counts(sce)
+    sfERCC = estimateSizeFactorsForMatrix(countsMmus)
+    sfMmus <- sfERCC
+    nCountsMmus = t( t(countsMmus) / sfERCC )
+    #use spike in to find tehcnical noise. 
+    # If no spike-ins are available, we can also use the endogenous read counts for fitting the mean-CV2 relation using a log-linear fit in the log-space.
+    # Alternatively, we can fit the mean-variance relationship in the log-space using local 2nd order polynomial regression (loess).
+    #techNoise = fitTechnicalNoise(nCountsMmus,nCountsERCC=nCountsERCC, fit_type = 'counts')  
+    techNoiseLogFit = fitTechnicalNoise(nCountsMmus, fit_type = 'log', use_ERCC = FALSE, plot=TRUE) 
+    #techNoiseLogVarFit = fitTechnicalNoise(nCountsMmus, fit_type = 'logvar', use_ERCC = FALSE, plot=TRUE) 
     
     #call variable genes
-    is_het = getVariableGenes(nCountsMmus, techNoise$fit, method = "fdr", 
-                              threshold = 0.1, fit_type="counts",sfEndo=sfMmus, sfERCC=sfERCC)
-    table(is_het)
+    #is_het = getVariableGenes(nCountsMmus, techNoiseLogFit$fit, method = "fit", 
+    #                          threshold = 0.1, fit_type="log",sfEndo=sfMmus, sfERCC=sfERCC)
+    #table(is_het)
     
     #we an also do this for the other fits
     is_hetLog = getVariableGenes(nCountsMmus, techNoiseLogFit$fit, plot=TRUE)
     table(is_hetLog)
-    is_hetLogVar = getVariableGenes(nCountsMmus, techNoiseLogVarFit$fit, plot=TRUE)
-    table(is_hetLogVar)
+    #is_hetLogVar = getVariableGenes(nCountsMmus, techNoiseLogVarFit$fit, plot=TRUE)
+    #table(is_hetLogVar)
     
-    #get cell cycle genes from GO 
-    ens_ids_cc <- getEnsembl('GO:0007049')
+    #get cell cycle genes from GO
+    cc.genes = read.delim("../../../../annotations/cellCycle_genes_worm/GO_0007049_genes.txt", 
+                         sep = "\t", header = FALSE)
+    cc.genes = unique(cc.genes[,3])
+    
     #rename a few variables
     Y = t(log10(nCountsMmus+1)) #normalised trandformed read counts
-    genes_het_bool = as.vector(is_het) #variable genes
+    genes_het_bool = as.vector(is_hetLog) #variable genes
     geneID = rownames(nCountsMmus) #gene IDs
-    tech_noise = as.vector(techNoise$techNoiseLog) #technical noise
+    tech_noise = as.vector(techNoiseLogFit$techNoiseLog) #technical noise
+    ens_ids_cc <- cc.genes
     
+    index.cc = match(cc.genes, geneID)
+    index.cc = index.cc[which(!is.na(index.cc))]
+    ##########################################
+    # can not proceed anymore and save tables for python in conda
+    ##########################################
     #construct and initialize new scLVM object
     sclvm = new("scLVM")
     sclvm = init(sclvm,Y=Y,tech_noise = tech_noise)
     
-    CellCycleARD = fitFactor(sclvm,geneSet = ens_ids_cc, k=20,use_ard = TRUE)
-  
+    # CellCycleARD = fitFactor(sclvm,geneSet = ens_ids_cc, k=20,use_ard = TRUE)
+    
+    write.table(Y, file = paste0(tabDir, "gene_expression_matrx_4scLVM.txt"), sep = "\t", row.names = FALSE, col.names = FALSE)
+    write.table(tech_noise, file = paste0(tabDir, "tech_noise_4scLVM.txt"), sep = "\t",row.names = FALSE, col.names = FALSE, quote = FALSE )
+    write.table(geneID, file =paste0(tabDir, "geneNames_4scLVM.txt"), sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE )
+    write.table(genes_het_bool==TRUE, file =paste0(tabDir, "index_hetgenes_4scLVM.txt"), sep = "\t", 
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
+    write.table(index.cc, file =paste0(tabDir, "index_ccgenes_4scLVM.txt"), sep = "\t", 
+                row.names = FALSE, col.names = FALSE, quote = FALSE)
   }
   
   if(method == "ccRemover"){
