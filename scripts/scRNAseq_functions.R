@@ -670,6 +670,7 @@ cellCycle.correction = function(sce, method = "seurat")
     detach("package:scater", unload=TRUE)
     
     seurat <- FindVariableFeatures(seurat, selection.method = "vst", nfeatures = 1000)
+    
     # Identify the 10 most highly variable genes
     top10 <- head(VariableFeatures(seurat), 25)
     plot1 <- VariableFeaturePlot(seurat)
@@ -831,12 +832,16 @@ cellCycle.correction = function(sce, method = "seurat")
   }
   
   if(method == "scLVM"){
-    
-    # select the python verson to use 
+    ##########################################
+    # select the python verson to use for Rstudio
     # https://cran.r-project.org/web/packages/reticulate/vignettes/versions.html
+    ##########################################
+    system("python --version")
+    system("which python")
+    
     library(reticulate)
     use_python("/Users/jiwang/anaconda3/envs/scLVM/bin/python")
-    use_condaenv(condaenv = "scLVM", conda = "/Users/jiwang/anaconda3/condabin/conda", required = TRUE)
+    #use_condaenv(condaenv = "scLVM", conda = "/Users/jiwang/anaconda3/condabin/conda", required = TRUE)
     py_config()
     
     system("python --version")
