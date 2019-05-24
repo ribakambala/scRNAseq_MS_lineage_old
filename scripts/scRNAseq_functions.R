@@ -916,6 +916,7 @@ cellCycle.correction = function(sce, method = "seurat")
     #rename a few variables
     Y = t(log10(nCountsMmus+1)) #normalised trandformed read counts
     genes_het_bool = as.vector(is_hetLog) #variable genes
+    #genes_het_bool[]
     geneID = rownames(nCountsMmus) #gene IDs
     tech_noise = as.vector(techNoiseLogFit$techNoiseLog) #technical noise
     ens_ids_cc <- cc.genes
@@ -932,10 +933,10 @@ cellCycle.correction = function(sce, method = "seurat")
     # CellCycleARD = fitFactor(sclvm,geneSet = ens_ids_cc, k=20,use_ard = TRUE)
     
     write.table(Y, file = paste0(tabDir, "gene_expression_matrx_4scLVM.txt"), sep = "\t", row.names = FALSE, col.names = FALSE)
-    write.table(tech_noise, file = paste0(tabDir, "tech_noise_4scLVM.txt"), sep = "\t",row.names = FALSE, col.names = FALSE, quote = FALSE )
+    write.table(tech_noise, file = paste0(tabDir, "tech_noise_4scLVM.txt"), sep = "\t",row.names = FALSE, col.names = TRUE, quote = FALSE )
     write.table(geneID, file =paste0(tabDir, "geneNames_4scLVM.txt"), sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE )
-    write.table(genes_het_bool==TRUE, file =paste0(tabDir, "index_hetgenes_4scLVM.txt"), sep = "\t", 
-                row.names = FALSE, col.names = FALSE, quote = FALSE)
+    write.table(which(genes_het_bool==TRUE), file =paste0(tabDir, "index_hetgenes_4scLVM.txt"), sep = "\t", 
+                row.names = FALSE, col.names = TRUE, quote = FALSE)
     write.table(index.cc, file =paste0(tabDir, "index_ccgenes_4scLVM.txt"), sep = "\t", 
                 row.names = FALSE, col.names = FALSE, quote = FALSE)
   }
