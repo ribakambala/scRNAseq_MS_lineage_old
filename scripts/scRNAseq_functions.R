@@ -934,7 +934,7 @@ cellCycle.correction = function(sce, method = "seurat")
     
     write.table(Y, file = paste0(tabDir, "gene_expression_matrx_4scLVM.txt"), sep = "\t", row.names = FALSE, col.names = FALSE)
     write.table(tech_noise, file = paste0(tabDir, "tech_noise_4scLVM.txt"), sep = "\t",row.names = FALSE, col.names = TRUE, quote = FALSE )
-    write.table(geneID, file =paste0(tabDir, "geneNames_4scLVM.txt"), sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE )
+    write.table(geneID, file =paste0(tabDir, "geneNames_4scLVM.txt"), sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE )
     write.table(which(genes_het_bool==TRUE), file =paste0(tabDir, "index_hetgenes_4scLVM.txt"), sep = "\t", 
                 row.names = FALSE, col.names = TRUE, quote = FALSE)
     write.table(index.cc, file =paste0(tabDir, "index_ccgenes_4scLVM.txt"), sep = "\t", 
