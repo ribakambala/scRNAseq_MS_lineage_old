@@ -29,12 +29,14 @@ load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_
 correct.cellCycle = TRUE
 
 ##########################################
-# remove the cell cycle confounder 
+# Remove the cell cycle confounder 
+# here we choose to use Seurat to regress out the cell cycle effect
 # we need to train the cells to identify the cell cycle phase
 # this could be more complicated than expected
 ##########################################
 if(correct.cellCycle){
   source("scRNAseq_functions.R")
+  
   # xx = cellCycle.correction(sce, method = "seurat")
   
   load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata')) 
@@ -82,8 +84,8 @@ if(correct.cellCycle){
     colour_by = "seqInfos"
   ) + ggtitle(paste0("UMAP -- "))
   
-  library(scater)
-  write.table(logcounts(sce), file = paste0(tabDir, "SCE_logcounts_for_scLVM.txt"), sep = "\t", row.names = TRUE, col.names = TRUE)
+  #library(scater)
+  #write.table(logcounts(sce), file = paste0(tabDir, "SCE_logcounts_for_scLVM.txt"), sep = "\t", row.names = TRUE, col.names = TRUE)
   
 }
 

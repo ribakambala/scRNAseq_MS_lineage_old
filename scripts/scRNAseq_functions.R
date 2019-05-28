@@ -677,11 +677,11 @@ cellCycle.correction = function(sce, method = "seurat")
     plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
     CombinePlots(plots = list(plot1, plot2))
     
-    seurat <- ScaleData(seurat, features = rownames(seurat), model.use = "linear")
+    seurat <- ScaleData(seurat, features = rownames(seurat), model.use = "linear") # standardize the data (x - mean(x))/sd(x)
     seurat <- RunPCA(seurat, features = VariableFeatures(seurat), ndims.print = 6:10, nfeatures.print = 10)
     
     DimPlot(seurat, reduction = "pca")
-    DimHeatmap(seurat, dims = c(8, 10))
+    DimHeatmap(seurat, dims = c(1, 2))
     
     source("scRNAseq_functions.R")
     c3.genes = find.cellcycle.markers(list.sel = "homologues")
