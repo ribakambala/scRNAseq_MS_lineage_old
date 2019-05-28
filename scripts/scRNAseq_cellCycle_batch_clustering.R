@@ -45,7 +45,7 @@ if(correct.cellCycle){
   library(scater)
   p1 = scater::plotPCA(
     sce.qc,
-    run_args = list(exprs_values = "logcounts", ntop = 500), 
+    run_args = list(exprs_values = "logcounts", feature_set = c(1:500)), 
     size_by = "total_counts",
     #size_by = "total_features_by_counts",
     colour_by = "seqInfos"
@@ -53,11 +53,13 @@ if(correct.cellCycle){
   
   p2 = scater::plotPCA(
     sce.qc,
-    run_args = list(exprs_values = "logcounts_seurat", ntop = 200), 
+    run_args = list(exprs_values = "logcounts_seurat", feature_set = c(1:500)), 
     size_by = "total_counts",
     #size_by = "total_features_by_counts",
     colour_by = "seqInfos"
   ) + ggtitle(paste0("PCA -- "))
+  
+  multiplot(p1, p2, cols = 2)
   
   p3 = scater::plotPCA(
     sce.qc,
