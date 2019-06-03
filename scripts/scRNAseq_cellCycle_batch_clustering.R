@@ -37,9 +37,10 @@ correct.cellCycle = TRUE
 if(correct.cellCycle){
   source("scRNAseq_functions.R")
   
-  xx = cellCycle.correction(sce, method = "seurat")
-  
-  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata')) 
+  #xx = cellCycle.correction(sce, method = "seurat")
+  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
+  sce_old = sce
+  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
   #saveRDS(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.rds'))
   
   library(scater)

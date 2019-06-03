@@ -653,13 +653,17 @@ cellCycle.correction = function(sce, method = "seurat")
     pdf(pdfname, width=12, height = 6)
     
     library(scater)
+    library(scran)
     # install loomR from GitHub using the remotes package remotes::install_github(repo = 'mojaveazure/loomR', ref = 'develop')
     library(loomR)
     library(Seurat)
+    # convert sce to seurat object (see https://satijalab.org/seurat/v3.0/conversion_vignette.html)
     seurat = as.Seurat(sce, counts = "counts", data = "logcounts")
+    Idents(seurat) <- colnames(seurat) # quite important this assignment for cell identity
+    
     detach("package:scater", unload=TRUE)
     
-    seurat <- FindVariableFeatures(seurat, selection.method = "vst", nfeatures = 1000)
+    seurat <- FindVariableFeatures(seurat, selection.method = "vst")
     
     # Identify the 10 most highly variable genes
     top10 <- head(VariableFeatures(seurat), 25)
@@ -670,8 +674,8 @@ cellCycle.correction = function(sce, method = "seurat")
     seurat <- ScaleData(seurat, features = rownames(seurat), model.use = "linear") # standardize the data (x - mean(x))/sd(x)
     seurat <- RunPCA(seurat, features = VariableFeatures(seurat), ndims.print = 6:10, nfeatures.print = 10)
     
-    DimPlot(seurat, reduction = "pca")
-    DimHeatmap(seurat, dims = c(1, 2))
+    #DimPlot(seurat, reduction = "pca")
+    # DimHeatmap(seurat, dims = c(1, 2))
     
     source("scRNAseq_functions.R")
     c3.genes = find.cellcycle.markers(list.sel = "homologues")
@@ -684,15 +688,16 @@ cellCycle.correction = function(sce, method = "seurat")
     seurat <- CellCycleScoring(seurat, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
     
     # view cell cycle scores and phase assignments
-    # head(seurat[[]])
+    head(seurat[[]])
     
     p00 = RidgePlot(seurat, features = c("cdk-1", "cdk-4", "cyd-1", "cye-1", "cya-1", "wee-1.3"), ncol = 2)
     plot(p00)
+    
     seurat <- RunPCA(seurat, features = VariableFeatures(seurat))
     DimPlot(seurat)
     
     seurat <- RunPCA(seurat, features = c(as.character(s.genes), as.character(g2m.genes)))
-    p0 = DimPlot(seurat)
+    p0 = DimPlot(seurat, cells = colnames(seurat))
     plot(p0)
     # regress out the cell cycle
     seurat1 <- ScaleData(seurat, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat))
@@ -712,12 +717,12 @@ cellCycle.correction = function(sce, method = "seurat")
     seurat2 <- RunPCA(seurat2, features = VariableFeatures(seurat2), nfeatures.print = 10)
     DimPlot(seurat2)
     
-     
     # when running a PCA on cell cycle genes, actively proliferating cells remain distinct from G1
     # cells however, within actively proliferating cells, G2M and S phase cells group together
     seurat2 <- RunPCA(seurat2, features = c(s.genes, g2m.genes))
     p2 = DimPlot(seurat2)
     plot(p2)
+    
     # save cell cycle scoring and corrected matrix
     library(scater)
     sce$S.Score = seurat$S.Score
@@ -726,14 +731,14 @@ cellCycle.correction = function(sce, method = "seurat")
     #sce$Phase.GO = seurat$old.ident
     sce$CC.Difference = seurat$CC.Difference
     
-    xx = as.data.frame(seurat@assays$RNA@scale.data); rownames(xx) = rownames(sce)
-    assay(sce, "logcounts_seurat") <- xx
+    #xx = as.data.frame(seurat@assays$RNA@scale.data); rownames(xx) = rownames(sce)
+    #assay(sce, "logcounts_seurat") <- xx
     xx = as.data.frame(seurat1@assays$RNA@scale.data); rownames(xx) = rownames(sce)
     assay(sce, "logcounts_seurat_cellcycleCorrected") <- xx
     xx = as.data.frame(seurat2@assays$RNA@scale.data); rownames(xx) = rownames(sce)
     assay(sce, "logcounts_seurat_SG2MCorrected") <- xx
     
-    #save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
+    save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata'))
     dev.off()
     
     return(sce)
