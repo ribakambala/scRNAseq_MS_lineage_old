@@ -83,59 +83,92 @@ options(stringsAsFactors = FALSE)
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
 
 ##########################################
-# 
+# Feature selection from different batches 
+# https://www.bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/batch.html
 ##########################################
-block <- sce$request
-fit <- trendVar(sce, block=block, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
-dec <- decomposeVar(sce, fit)
+# here batches are requests
+batches <- sce$request 
 
-plot(dec$mean, dec$total, xlab="Mean log-expression", 
-     ylab="Variance of log-expression", pch=16)
-curve(fit$trend(x), col="dodgerblue", add=TRUE)
+doubleCheck.bacth.Norm.Vars = FALSE
+if(doubleCheck.bacth.Norm.Vars){
+  
+  fit <- trendVar(sce, block=batches, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
+  dec <- decomposeVar(sce, fit)
+  
+  matplot(fit$means[c(1:70), ], fit$vars[c(1:70), ], col=c("darkorange", "forestgreen", "darkblue"),
+          xlab="Mean log-expression", ylab="Variance of log-expression")
+  curve(fit$trend(x), add=TRUE, col="red")
+  
+  plot(dec$mean, dec$total, xlab="Mean log-expression", 
+       ylab="Variance of log-expression", pch=16)
+  curve(fit$trend(x), col="dodgerblue", add=TRUE)
+  
+  tmp.416B <- sce
+  tmp.416B$log_size_factor <- log(sizeFactors(sce))
+  #tmp.416B$log_size_factor_ERCC <- log(sizeFactors(sce.416B, "ERCC"))
+  plotColData(tmp.416B, x="request", y="log_size_factor")
+  #p2 <- plotColData(tmp.416B, x="Plate", y="log_size_factor_ERCC")
+  #multiplot(p1, p2, cols=2)
+}
 
-dec.sorted <- dec[order(dec$bio, decreasing=TRUE),]
+sce.bc <- multiBlockNorm(sce, block = sce$request)
+plot(sizeFactors(sce), sizeFactors(sce.bc)); abline(0, 1) # did not change anything here
+comb.out <- multiBlockVar(sce.bc, block=sce.bc$request, assay.type="logcounts",
+                          trend.args=list(parametric=TRUE, use.spikes=FALSE, loess.args=list(span=0.4)))
+
+head(comb.out[,1:6])
+
+par(mfrow=c(1,3))
+#is.spike <- isSpike(sce.416B.2)
+for (plate in unique(sce.bc$request)) {
+  cur.out <- comb.out$per.block[[plate]]
+  plot(cur.out$mean, cur.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
+       ylab="Variance of log-expression", main=plate, ylim = c(0, 25), xlim = c(0, 15))
+  curve(metadata(cur.out)$trend(x), col="dodgerblue", lwd=2, add=TRUE)
+  #points(cur.out$mean[is.spike], cur.out$total[is.spike], col="red", pch=16)
+}
+
+dec.sorted <- comb.out[order(comb.out$bio, decreasing=TRUE),]
 head(dec.sorted)
 #length(which(dec.sorted$bio>0))
 
 # here HVGs selected with FDR<0.01
-gene.chosen <- rownames(dec.sorted)[which(dec.sorted$FDR <0.001)]
+gene.chosen <- which(dec.sorted$FDR <0.10)
 length(gene.chosen)
 
 ##########################################
-# Here we are going to run both mnnCorrect() and fastMNN() 
+# Here we are using fastMNN from scran 
 ##########################################
 rescaling.for.multBatch = FALSE
+Use.fastMNN = TRUE
+Use.mnnCorrect = FALSE
 
 if(rescaling.for.multBatch){
   rescaled <- multiBatchNorm(sce[ , which(sce.qc$request == "R6875")], 
                              sce[ , which(sce.qc$request == "R7116")],
                              sce[ , which(sce.qc$request == "R7130")])
-  rescaled.R6875 <- rescaled[[1]]
-  rescaled.R7116 <- rescaled[[2]]
-  rescaled.R7130 <- rescaled[[3]] 
-  
-  R6875=logcounts(rescaled.R6875)
-  R7116=logcounts(rescaled.R7116)
-  R7130=logcounts(rescaled.R7130)
+  rescaled.R6875 <- rescaled[[1]]; rescaled.R7116 <- rescaled[[2]]; rescaled.R7130 <- rescaled[[3]] 
+  R6875=logcounts(rescaled.R6875); R7116=logcounts(rescaled.R7116); R7130=logcounts(rescaled.R7130)
 }else{
-  R6879 = logcounts(sce[ , which(sce$request == "R6875")])
-  R7116 = logcounts(sce[ , which(sce$request == "R7116")])
-  R7130 = logcounts(sce[ , which(sce$request == "R7130")])
+  R6879 = logcounts(sce.bc[ , which(sce.bc$request == "R6875")])
+  R7116 = logcounts(sce.bc[ , which(sce.bc$request == "R7116")])
+  R7130 = logcounts(sce.bc[ , which(sce.bc$request == "R7130")]) 
 }
 
-Use.fastMNN = TRUE
+
 if(Use.fastMNN){
-  set.seed(100) 
-  original <- list(
-    R6879 = R6879,
-    R7116 = R7116,
-    R7130 = R7130
-  )
+  set.seed(100)
+  original <- list(R6879[gene.chosen, ],
+  R7116[gene.chosen, ],
+  R7130[gene.chosen, ])
+
+  mnn.out <- fastMNN(original, k=20, d=50, cos.norm = TRUE, auto.order=c(3,2,1), approximate=TRUE)
   
+  #mnn.out
   # Slightly convoluted call to avoid re-writing code later.
   # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
-  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, subset.row = gene.chosen, auto.order=c(3,2,1),
-                                               approximate=TRUE)))
+  #mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, subset.row = gene.chosen, auto.order=c(3,2,1),
+  #                                             approximate=TRUE)))
   dim(mnn.out$corrected)
   mnn.out$batch
   mnn.out$pairs
@@ -148,7 +181,7 @@ if(Use.fastMNN){
   
   set.seed(1000)
   with.var <- do.call(fastMNN, c(original,
-                                 list(k=20, cos.norm = TRUE, d=50, subset.row = gene.chosen, auto.order=c(3,2,1), approximate=TRUE,
+                                 list(k=20, cos.norm = TRUE, d=50, auto.order=c(3,2,1), approximate=TRUE,
                                       compute.variances=TRUE)))
   with.var$lost.var
   
@@ -161,7 +194,7 @@ if(Use.fastMNN){
   # check the effect of correction by fastMNN
   set.seed(100)
   # Using irlba to set up the t-SNE, for speed.
-  osce <- runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts", feature_set = gene.chosen)
+  osce <- runPCA(sce, ncomponents = 20, ntop=Inf, method="irlba", exprs_values = "logcounts", feature_set = gene.chosen)
   #plotPCA(osce, colour_by="Batch") + ggtitle("Original")
   osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
   ot <- plotTSNE(osce, colour_by="Batch") + ggtitle("Original")
@@ -181,7 +214,7 @@ if(Use.fastMNN){
   
 }
 
-Use.mnnCorrect = TRUE
+
 if(Use.mnnCorrect){
   set.seed(100)
   require(BiocParallel)
