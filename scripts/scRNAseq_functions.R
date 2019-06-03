@@ -739,9 +739,10 @@ cellCycle.correction = function(sce, method = "seurat")
     assay(sce, "logcounts_seurat_SG2MCorrected") <- xx
     
     save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata'))
+    
     dev.off()
     
-    return(sce)
+    # return(sce)
     
     ##########################################
     # a peek of source code for cellCycle.scoring function from Seurat

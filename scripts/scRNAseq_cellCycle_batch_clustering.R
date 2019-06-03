@@ -37,9 +37,9 @@ correct.cellCycle = TRUE
 if(correct.cellCycle){
   source("scRNAseq_functions.R")
   
-  #xx = cellCycle.correction(sce, method = "seurat")
-  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
-  sce_old = sce
+  # cellCycle.correction(sce, method = "seurat")
+  #load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
+  #sce_old = sce
   load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
   #saveRDS(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.rds'))
   
@@ -73,21 +73,18 @@ if(correct.cellCycle){
 # But many of them, e.g. BASics, Brennecke works better with spike-in 
 ##########################################
 library(scRNA.seq.funcs)
-#library(RUVSeq)
 library(scater)
 library(SingleCellExperiment)
 library(scran)
 library(kBET)
-#library(sva) # Combat
-#library(edgeR)
 set.seed(1234567)
 options(stringsAsFactors = FALSE)
 
-#sce.qc = sce
+load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
 
-#block <- paste0(sce.gse81076$Plate, "_", sce.gse81076$Donor)
-#fit <- trendVar(sce.gse81076, block=block, parametric=TRUE)
-#dec <- decomposeVar(sce.gse81076, fit)
+##########################################
+# 
+##########################################
 block <- sce$request
 fit <- trendVar(sce, block=block, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
 dec <- decomposeVar(sce, fit)
@@ -101,13 +98,14 @@ head(dec.sorted)
 #length(which(dec.sorted$bio>0))
 
 # here HVGs selected with FDR<0.01
-gene.chosen <- rownames(dec.sorted)[which(dec.sorted$FDR <0.01)]
+gene.chosen <- rownames(dec.sorted)[which(dec.sorted$FDR <0.001)]
 length(gene.chosen)
 
 ##########################################
 # Here we are going to run both mnnCorrect() and fastMNN() 
 ##########################################
 rescaling.for.multBatch = FALSE
+
 if(rescaling.for.multBatch){
   rescaled <- multiBatchNorm(sce[ , which(sce.qc$request == "R6875")], 
                              sce[ , which(sce.qc$request == "R7116")],
