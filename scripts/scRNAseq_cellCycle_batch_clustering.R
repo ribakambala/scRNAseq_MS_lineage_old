@@ -37,14 +37,14 @@ correct.cellCycle = TRUE
 if(correct.cellCycle){
   source("scRNAseq_functions.R")
   
-  # xx = cellCycle.correction(sce, method = "seurat")
+  xx = cellCycle.correction(sce, method = "seurat")
   
   load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata')) 
   #saveRDS(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.rds'))
-  sce.qc = sce
+  
   library(scater)
   p1 = scater::plotPCA(
-    sce.qc,
+    sce,
     run_args = list(exprs_values = "logcounts", feature_set = c(1:500)), 
     size_by = "total_counts",
     #size_by = "total_features_by_counts",
@@ -52,7 +52,7 @@ if(correct.cellCycle){
   ) + ggtitle(paste0("PCA -- "))
   
   p2 = scater::plotPCA(
-    sce.qc,
+    sce,
     run_args = list(exprs_values = "logcounts_seurat", feature_set = c(1:500)), 
     size_by = "total_counts",
     #size_by = "total_features_by_counts",
@@ -60,34 +60,6 @@ if(correct.cellCycle){
   ) + ggtitle(paste0("PCA -- "))
   
   multiplot(p1, p2, cols = 2)
-  
-  p3 = scater::plotPCA(
-    sce.qc,
-    run_args = list(exprs_values = "logcounts_seurat_cellcycleCorrected"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("PCA -- "))
-  
-  p4 = scater::plotPCA(
-    sce.qc,
-    run_args = list(exprs_values = "logcounts_seurat_SG2MCorrected"), 
-    size_by = "total_counts",
-    #size_by = "total_features_by_counts",
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("PCA -- "))
-  
-  multiplot(p1, p2, p3, p4, cols = 2)
- 
-  plotUMAP(
-    sce.qc,
-    run_args = list(exprs_values = "logcounts_seurat_SG2MCorrected"), 
-    size_by = "total_counts",
-    colour_by = "seqInfos"
-  ) + ggtitle(paste0("UMAP -- "))
-  
-  #library(scater)
-  #write.table(logcounts(sce), file = paste0(tabDir, "SCE_logcounts_for_scLVM.txt"), sep = "\t", row.names = TRUE, col.names = TRUE)
   
 }
 
@@ -104,7 +76,7 @@ library(scRNA.seq.funcs)
 library(scater)
 library(SingleCellExperiment)
 library(scran)
-#library(kBET)
+library(kBET)
 #library(sva) # Combat
 #library(edgeR)
 set.seed(1234567)

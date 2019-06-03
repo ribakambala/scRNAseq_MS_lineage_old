@@ -648,20 +648,10 @@ find.cellcycle.markers = function(list.sel = 'homologues')
 
 cellCycle.correction = function(sce, method = "seurat")
 {
-  
-  if(method == 'scran'){
-    set.seed(100)
-    library(scran)
-    mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", 
-                                    package="scran"))
-    assignments <- cyclone(sce, mm.pairs, gene.names=rowData(sce)$ENSEMBL)
-    plot(assignments$score$G1, assignments$score$G2M, 
-         xlab="G1 score", ylab="G2/M score", pch=16)
-    sce$phases <- assignments$phases
-    table(sce$phases)
-  }
-  
   if(method == "seurat"){
+    pdfname = paste0(resDir, "/scRNAseq_cellCycle_regression_Seurat.pdf")
+    pdf(pdfname, width=12, height = 6)
+    
     library(scater)
     # install loomR from GitHub using the remotes package remotes::install_github(repo = 'mojaveazure/loomR', ref = 'develop')
     library(loomR)
@@ -696,37 +686,38 @@ cellCycle.correction = function(sce, method = "seurat")
     # view cell cycle scores and phase assignments
     # head(seurat[[]])
     
-    RidgePlot(seurat, features = c("cdk-1", "cdk-4", "cyd-1", "cye-1", "cya-1", "wee-1.3"), ncol = 2)
+    p00 = RidgePlot(seurat, features = c("cdk-1", "cdk-4", "cyd-1", "cye-1", "cya-1", "wee-1.3"), ncol = 2)
+    plot(p00)
     seurat <- RunPCA(seurat, features = VariableFeatures(seurat))
-    p0 = DimPlot(seurat)
-    
-    seurat <- RunPCA(seurat, features = c(as.character(s.genes), as.character(g2m.genes)))
     DimPlot(seurat)
     
+    seurat <- RunPCA(seurat, features = c(as.character(s.genes), as.character(g2m.genes)))
+    p0 = DimPlot(seurat)
+    plot(p0)
     # regress out the cell cycle
     seurat1 <- ScaleData(seurat, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat))
         
     seurat1 <- RunPCA(seurat1, features = VariableFeatures(seurat1), nfeatures.print = 10)
-    p1 = DimPlot(seurat1)
+    DimPlot(seurat1)
     
     # When running a PCA on only cell cycle genes, cells no longer separate by cell-cycle phase
     seurat1 <- RunPCA(seurat1, features = c(s.genes, g2m.genes))
-    DimPlot(seurat1)
-    
+    p1 = DimPlot(seurat1)
+    plot(p1)
     # regressing out the difference between the G2M and S phase scores
     seurat$CC.Difference <- seurat$S.Score - seurat$G2M.Score
     seurat2 <- ScaleData(seurat, vars.to.regress = "CC.Difference", features = rownames(seurat))
     
     # cell cycle effects strongly mitigated in PCA
     seurat2 <- RunPCA(seurat2, features = VariableFeatures(seurat2), nfeatures.print = 10)
-    p2 = DimPlot(seurat2)
+    DimPlot(seurat2)
     
      
     # when running a PCA on cell cycle genes, actively proliferating cells remain distinct from G1
     # cells however, within actively proliferating cells, G2M and S phase cells group together
     seurat2 <- RunPCA(seurat2, features = c(s.genes, g2m.genes))
-    DimPlot(seurat2)
-    
+    p2 = DimPlot(seurat2)
+    plot(p2)
     # save cell cycle scoring and corrected matrix
     library(scater)
     sce$S.Score = seurat$S.Score
@@ -742,7 +733,8 @@ cellCycle.correction = function(sce, method = "seurat")
     xx = as.data.frame(seurat2@assays$RNA@scale.data); rownames(xx) = rownames(sce)
     assay(sce, "logcounts_seurat_SG2MCorrected") <- xx
     
-    save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
+    #save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
+    dev.off()
     
     return(sce)
     
@@ -829,6 +821,21 @@ cellCycle.correction = function(sce, method = "seurat")
       }
     }
     
+  }
+  ##########################################
+  # scran method is based on trained classifier for mouse or human
+  # so at the end it not usable
+  ##########################################
+  if(method == 'scran'){
+    set.seed(100)
+    library(scran)
+    mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", 
+                                    package="scran"))
+    assignments <- cyclone(sce, mm.pairs, gene.names=rowData(sce)$ENSEMBL)
+    plot(assignments$score$G1, assignments$score$G2M, 
+         xlab="G1 score", ylab="G2/M score", pch=16)
+    sce$phases <- assignments$phases
+    table(sce$phases)
   }
   
   if(method == "scLVM"){
