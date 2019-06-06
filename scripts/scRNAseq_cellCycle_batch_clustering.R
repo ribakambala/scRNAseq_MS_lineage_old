@@ -82,9 +82,9 @@ options(stringsAsFactors = FALSE)
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
 
 Norm.Vars.per.batch = TRUE
-rescaling.for.multBatch = FALSE
+#rescaling.for.multBatch = TRUE
 Use.fastMNN = TRUE
-Use.mnnCorrect = FALSE
+Test.mnnCorrect = FALSE
 ##########################################
 # Feature selection (select HGVs) for batch corrections
 # there are two options: batch-specific or use batch as block
@@ -93,9 +93,12 @@ Use.mnnCorrect = FALSE
 batches = sce$seqInfos # choose the batches (either plates or request)
 bc.uniq = unique(batches)
 sce$batches <- batches
-order2correct = c(4,3, 2,1)
+order2correct = c(4,3,2,1)
 
 if(!Norm.Vars.per.batch){
+  ## here we use batches as blockes, i.e. calculated mean and variances separately for each batches and then fit the trend
+  ## In doing so, we implicitly assume that the trend is the same between batches
+  ## https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/var.html#41_using_the_block=_argument
   
   fit <- trendVar(sce, block=sce$batches, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
   dec <- decomposeVar(sce, fit)
@@ -103,7 +106,7 @@ if(!Norm.Vars.per.batch){
   par(mfrow=c(1,3))
   cols = c(1:length(bc.uniq)) 
   nb.genes = min(table(sce$batches))
-    
+  
   matplot(fit$means[c(1:nb.genes), ], fit$vars[c(1:nb.genes), ], col=cols,
           xlab="Mean log-expression", ylab="Variance of log-expression")
   curve(fit$trend(x), add=TRUE, col="red")
@@ -122,10 +125,12 @@ if(!Norm.Vars.per.batch){
   head(dec.sorted)
   
   # here HVGs selected with FDR<0.01
-  gene.chosen <- which(dec.sorted$FDR < 0.01)
+  gene.chosen <- which(dec.sorted$FDR < 0.05)
   length(gene.chosen)
 
 }else{
+  ## here we search batch-specific features
+  ## https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/var.html#42_fitting_batch-specific_trends
   sce.bc <- multiBlockNorm(sce, block = sce$request)
   plot(sizeFactors(sce), sizeFactors(sce.bc)); abline(0, 1) # did not change anything here
   comb.out <- multiBlockVar(sce.bc, block=sce.bc$request, assay.type="logcounts",
@@ -143,7 +148,7 @@ if(!Norm.Vars.per.batch){
     #points(cur.out$mean[is.spike], cur.out$total[is.spike], col="red", pch=16)
   }
   
-  dec.sorted <- comb.out[order(comb.out$bio, decreasing=TRUE),]
+  dec.sorted <- comb.out[order(comb.out$bio, decreasing=TRUE), ]
   head(dec.sorted)
   
   #length(which(dec.sorted$bio>0))
@@ -155,64 +160,108 @@ if(!Norm.Vars.per.batch){
 ##########################################
 # Here we are using fastMNN from scran 
 ##########################################
-if(rescaling.for.multBatch){
-  rescaled <- multiBatchNorm(sce[ , which(sce.qc$request == "R6875")], 
-                             sce[ , which(sce.qc$request == "R7116")],
-                             sce[ , which(sce.qc$request == "R7130")])
-  rescaled.R6875 <- rescaled[[1]]; rescaled.R7116 <- rescaled[[2]]; rescaled.R7130 <- rescaled[[3]] 
-  R6875=logcounts(rescaled.R6875); R7116=logcounts(rescaled.R7116); R7130=logcounts(rescaled.R7130)
-}else{
-  
-}
-
 if(Use.fastMNN){
-  set.seed(100)
-  original = list()
+  ## rescaling for each batch is recommended by the author
+  ## We adjust the size factors with multiBatchNorm() to make them more comparable across batches. 
+  ## This mitigates differences in scale and variance in the log-expression values between batches, especially between technologies.
+  ## https://www.bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/multibatch.html#3_feature_selection_across_batches
+  ttxt = c("nout = multiBatchNorm(")
   for(n in 1:length(bc.uniq)){
+    if(n != length(bc.uniq)) {
+      ttxt = paste0(ttxt, "sce[, which(sce$batches == '", bc.uniq[n], "')], ")
+    } else {
+      ttxt = paste0(ttxt, "sce[, which(sce$batches == '", bc.uniq[n], "')])")
+    }
+  }
+  eval(parse(text = ttxt)) ## rescaling done
+  
+  original = list()
+  #original0 = list()
+  for(n in 1:length(bc.uniq)){
+    #xx = nout[[n]];
+    original[[n]] = logcounts((nout[[n]][gene.chosen, ]))
     original[[n]] = logcounts((sce[gene.chosen, which(sce$batches == bc.uniq[n])]))
   }
-  R6879 = logcounts(sce[ , which(sce$request == "R6875")])
-  R7116 = logcounts(sce[ , which(sce$request == "R7116")])
-  R7130 = logcounts(sce[ , which(sce$request == "R7130")]) 
-  original <- list(R6879[gene.chosen, ],
-  R7116[gene.chosen, ],
-  R7130[gene.chosen, ])
+  
+  kk2check = 2
+  plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
+  #nout <- multiBatchNorm(sce.gse81076[universe,], sce.gse85241[universe,],
+  #                       sce.gse86469[universe,], sce.emtab[universe,])
+  #sce.gse81076 <- nout[[1]]
+  #sce.gse85241 <- nout[[2]]
+  #sce.gse86469 <- nout[[3]]
+  #sce.emtab <- nout[[4]]
+  #rescaled <- multiBatchNorm(
+  #  sce.gse85241[universe,], 
+  #  sce.gse81076[universe,]
+  #)
+  #rescaled.gse85241 <- rescaled[[1]]
+  #rescaled.gse81076 <- rescaled[[2]]
   
   # Slightly convoluted call to avoid re-writing code later.
   # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
+  set.seed(100)
   mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, auto.order=order2correct,
                                                approximate=TRUE)))
   dim(mnn.out$corrected)
   mnn.out$batch
+  Rle(mnn.out$batch) 
+  #metadata(mnn.out)$merge.info$pairs[[1]]
   reducedDim(sce, "MNN") <- mnn.out$corrected
   sce$mnn_Batch <- as.character(mnn.out$batch)
   sce
   
   ##########################################
   # check the effectiveness of batch correction with MNN
+  # 1) check the MNN pairs and lost variances
+  # 2) PCA and UMAP before and after correction
+  # 3) kBET test
   ##########################################
   mnn.out$pairs
   #omat <- do.call(cbind, original)
   #sce.qc <- SingleCellExperiment(list(logcounts=omat))
- 
   set.seed(1000)
   with.var <- do.call(fastMNN, c(original,
                                  list(k=20, cos.norm = TRUE, d=50, auto.order=order2correct, approximate=TRUE,
                                       compute.variances=TRUE)))
   with.var$lost.var
   
+  pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_inLowDimensions.pdf")
+  pdf(pdfname, width=18, height = 8)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
   sce.tmp = sce[gene.chosen, which(sce$mnn_Batch > 2)]
-  sce.tmp <- runPCA(sce.tmp, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts")
+  sce.tmp <- runPCA(sce.tmp, ncomponents = 50, ntop=nrow(sce.tmp), method="irlba", exprs_values = "logcounts", scale_features = TRUE)
   
   plotPCA(sce.tmp, colour_by="mnn_Batch") + ggtitle("Original")
+  
   dff = as.data.frame(reducedDim(sce.tmp, "MNN"))
   colnames(dff) = paste0("PC", c(1:ncol(dff)))
   dff$batches = sce.tmp$batches
   ggp = ggplot(data=dff, aes(PC1, PC2, color=batches)) + geom_point(size=3) 
   plot(ggp);
   
-  #plot(dff[,1], dff[, 2])
+  # check the effect of correction by fastMNN
+  #set.seed(100)
+  # Using irlba to set up the t-SNE, for speed.
+  # osce <- runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts_seurat_SG2MCorrected", feature_set = gene.chosen)
+  #plotPCA(osce, colour_by="Batch") + ggtitle("Original")
+  #osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
+  #ot <- plotTSNE(osce, colour_by="mnn_Batch") + ggtitle("Original")
+  #set.seed(100)
+  #csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
+  #ct <- plotTSNE(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
+  #multiplot(ot, ct, cols=2)
   
+  set.seed(100)
+  osce <- runUMAP(sce.tmp, use_dimred="PCA", perplexity = 50)
+  ot <- plotUMAP(osce, colour_by="mnn_Batch") + ggtitle("Original")
+  set.seed(100)
+  csce <- runUMAP(sce.tmp, use_dimred="MNN", perplexity = 50)
+  ct <- plotUMAP(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
+  multiplot(ot, ct, cols=2)
+  
+    
   kbet.orig <- kBET(
     df = t(reducedDim(sce.tmp, "PCA")), 
     batch = sce.tmp$batches,
@@ -220,14 +269,13 @@ if(Use.fastMNN){
     do.pca = FALSE,
     verbose = TRUE, 
     addTest = FALSE,
-    testSize = 5,
+    n_repeat = 100,
     plot = TRUE)
   
   #require('FNN')
   # data: a matrix (rows: samples, columns: features (genes))
   #k0=floor(mean(table(sce.tmp$batches))) #neighbourhood size: mean batch size 
   #knn <- get.knn(, k=k0, algorithm = 'cover_tree')
-  
   kbet.bc = kBET(
     df = t(reducedDim(sce.tmp, "MNN")), 
     batch = sce.tmp$batches,
@@ -235,34 +283,8 @@ if(Use.fastMNN){
     heuristic = FALSE,
     verbose = TRUE, 
     addTest = FALSE,
-    testSize = 5,
+    n_repeat = 200,
     plot = TRUE)
-  
-  #save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrect_fastMNN.Rdata'))
-  
-  pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_inLowDimensions.pdf")
-  pdf(pdfname, width=18, height = 8)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-  
-  # check the effect of correction by fastMNN
-  set.seed(100)
-  # Using irlba to set up the t-SNE, for speed.
-  osce <- runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts_seurat_SG2MCorrected", feature_set = gene.chosen)
-  #plotPCA(osce, colour_by="Batch") + ggtitle("Original")
-  osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
-  ot <- plotTSNE(osce, colour_by="mnn_Batch") + ggtitle("Original")
-  set.seed(100)
-  csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
-  ct <- plotTSNE(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
-  multiplot(ot, ct, cols=2)
-  
-  set.seed(100)
-  osce <- runUMAP(osce, use_dimred="PCA", perplexity = 50)
-  ot <- plotUMAP(osce, colour_by="mnn_Batch") + ggtitle("Original")
-  set.seed(100)
-  csce <- runUMAP(sce, use_dimred="MNN", perplexity = 50)
-  ct <- plotUMAP(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
-  multiplot(ot, ct, cols=2)
   
   dev.off()
   
