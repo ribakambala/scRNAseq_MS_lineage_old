@@ -99,11 +99,10 @@ if(!Norm.Vars.per.batch){
   ## here we use batches as blockes, i.e. calculated mean and variances separately for each batches and then fit the trend
   ## In doing so, we implicitly assume that the trend is the same between batches
   ## https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/var.html#41_using_the_block=_argument
-  
   fit <- trendVar(sce, block=sce$batches, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
   dec <- decomposeVar(sce, fit)
   
-  par(mfrow=c(1,3))
+  par(mfrow=c(1,2))
   cols = c(1:length(bc.uniq)) 
   nb.genes = min(table(sce$batches))
   
@@ -131,10 +130,15 @@ if(!Norm.Vars.per.batch){
 }else{
   ## here we search batch-specific features
   ## https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/var.html#42_fitting_batch-specific_trends
-  sce.bc <- multiBlockNorm(sce, block = sce$request)
-  plot(sizeFactors(sce), sizeFactors(sce.bc)); abline(0, 1) # did not change anything here
+  sce.bc = sce
+  ## recommendation in the function help: Centering should be performed by running multiBlockNorm before calling this function. 
+  sce.bc <- multiBlockNorm(sce.bc, block = sce$request, normalize.args= list(centre_size_factors = TRUE))
+  
+  par(mfrow=c(1,1))
+  plot(sizeFactors(sce), sizeFactors(sce.bc), log='xy'); abline(0, 1, lwd =2, col = 'red') # did not change anything here, weired
+  
   comb.out <- multiBlockVar(sce.bc, block=sce.bc$request, assay.type="logcounts",
-                            trend.args=list(parametric=TRUE, use.spikes=FALSE, loess.args=list(span=0.4)))
+                            trend.args=list(parametric=TRUE, use.spikes=FALSE))
   
   head(comb.out[,1:6])
   
@@ -148,17 +152,30 @@ if(!Norm.Vars.per.batch){
     #points(cur.out$mean[is.spike], cur.out$total[is.spike], col="red", pch=16)
   }
   
-  dec.sorted <- comb.out[order(comb.out$bio, decreasing=TRUE), ]
-  head(dec.sorted)
+  dec.bc.sorted <- comb.out[order(comb.out$bio, decreasing=TRUE), ]
+  head(dec.bc.sorted)
   
   #length(which(dec.sorted$bio>0))
   # here HVGs selected with FDR<0.01
-  gene.chosen <- which(dec.sorted$bio>0)
-  length(gene.chosen)
+  #gene.chosen.bc <- which(dec.bc.sorted$p.value < 0.05)
+  gene.chosen.bc = which(dec.bc.sorted$bio>0)
+  #length(which(dec.sorted$bio>0))
+  length(gene.chosen.bc)
+  
+  ### compare the block and batch-specific HVGs selection
+  cat(length(gene.chosen), length(gene.chosen.bc), length(intersect(gene.chosen, gene.chosen.bc)), "\n")
+  #library(VennDiagram)
+  #venn.diagram(
+  #  x = list(gene.chosen, gene.chosen.bc),
+  #  category.names = c("batch-block" , "batch-specific"), filename = paste0(resDir, "/batch_block_specific.png"), output = TRUE)
+  
+  gene.chosen = gene.chosen.bc
+  
 }
 
 ##########################################
-# Here we are using fastMNN from scran 
+# Batch correction using fastMNN from scran
+# here we are using fastMNN
 ##########################################
 if(Use.fastMNN){
   ## rescaling for each batch is recommended by the author
@@ -214,7 +231,7 @@ if(Use.fastMNN){
   ##########################################
   # check the effectiveness of batch correction with MNN
   # 1) check the MNN pairs and lost variances
-  # 2) PCA and UMAP before and after correction
+  # 2) visualization wiht PCA, tSNE and UMAP before and after correction
   # 3) kBET test
   ##########################################
   mnn.out$pairs
@@ -241,17 +258,14 @@ if(Use.fastMNN){
   ggp = ggplot(data=dff, aes(PC1, PC2, color=batches)) + geom_point(size=3) 
   plot(ggp);
   
-  # check the effect of correction by fastMNN
-  #set.seed(100)
   # Using irlba to set up the t-SNE, for speed.
-  # osce <- runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts_seurat_SG2MCorrected", feature_set = gene.chosen)
-  #plotPCA(osce, colour_by="Batch") + ggtitle("Original")
-  #osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
-  #ot <- plotTSNE(osce, colour_by="mnn_Batch") + ggtitle("Original")
-  #set.seed(100)
-  #csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
-  #ct <- plotTSNE(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
-  #multiplot(ot, ct, cols=2)
+  set.seed(100)
+  osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
+  ot <- plotTSNE(osce, colour_by="mnn_Batch") + ggtitle("Original")
+  set.seed(100)
+  csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
+  ct <- plotTSNE(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
+  multiplot(ot, ct, cols=2)
   
   set.seed(100)
   osce <- runUMAP(sce.tmp, use_dimred="PCA", perplexity = 50)
@@ -261,7 +275,6 @@ if(Use.fastMNN){
   ct <- plotUMAP(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
   multiplot(ot, ct, cols=2)
   
-    
   kbet.orig <- kBET(
     df = t(reducedDim(sce.tmp, "PCA")), 
     batch = sce.tmp$batches,
