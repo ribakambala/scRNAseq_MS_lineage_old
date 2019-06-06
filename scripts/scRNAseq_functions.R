@@ -999,6 +999,60 @@ cellCycle.correction = function(sce, method = "seurat")
   
 }
 
+########################################################
+########################################################
+# Section : bach correction testing
+# 
+########################################################
+########################################################
+batchCorrection_Scanorama = function()
+{
+  ## quick test for one batch correction method Scanorama
+  ## example code from https://github.com/brianhie/scanorama
+  #Sys.setenv(PATH = paste0(c("/Users/jiwang/anaconda3/envs/Scanorama/bin", Sys.getenv("PATH")), collapse = ":"))
+  #Sys.setenv(RETICULATE_PYTHON = "/Users/jiwang/anaconda3/envs/Scanorama/bin/python")
+  reticulate::py_config()
+  #install.packages("reticulate")
+  
+  library(reticulate)
+  #Sys.which("python")
+  #reticulate::py_config()
+  #reticulate::use_python("/Users/jiwang/anaconda3/envs/Scanorama/bin/python")
+  reticulate::py_config()
+  
+  #use_virtualenv("/Users/jiwang/anaconda3/envs/Scanorama")
+  #use_condaenv("Scanorama")
+  #reticulate::py_config()
+  
+  #library(reticulate)
+  #xx = import('numpy')
+  #Sys.which(xx)
+  scanorama <- import('scanorama')
+  
+  #library(reticulate)
+  #scanorama <- import('scanorama')
+  
+  # List of data sets (matrices of cells-by-genes)
+  # List of gene lists:
+  datasets = list()
+  genes_list = list()
+  for(n in 1:length(original)){
+    datasets[[n]] <- t(original[[n]])
+    genes_list[[n]] <- as.list(rownames(sce)[gene.chosen])
+  }
+  
+  # Integration.
+  #integrated.data <- scanorama$integrate(datasets, genes_list)
+  
+  # Batch correction
+  ## Note that reticulate has trouble returning sparse matrices, so you should set the return_dense flag to TRUE 
+  ## (which returns the corrected data as R matrix objects) when attempting to use Scanorama's correct() method in R.
+  ## This will increase memory usage, however, especially for very large data sets.
+  corrected.data <- scanorama$correct(datasets, genes_list, return_dense=TRUE)
+  
+  # Integration and batch correction.
+  #integrated.corrected.data <- scanorama$correct(datasets, genes_list, return_dimred=TRUE, return_dense=TRUE)
+}
 
 ########################################################
 ########################################################

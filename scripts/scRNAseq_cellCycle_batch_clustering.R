@@ -132,19 +132,19 @@ if(!Norm.Vars.per.batch){
   ## https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/var.html#42_fitting_batch-specific_trends
   sce.bc = sce
   ## recommendation in the function help: Centering should be performed by running multiBlockNorm before calling this function. 
-  sce.bc <- multiBlockNorm(sce.bc, block = sce$request, normalize.args= list(centre_size_factors = TRUE))
+  sce.bc <- multiBlockNorm(sce.bc, block = sce.bc$batches)
   
   par(mfrow=c(1,1))
   plot(sizeFactors(sce), sizeFactors(sce.bc), log='xy'); abline(0, 1, lwd =2, col = 'red') # did not change anything here, weired
   
-  comb.out <- multiBlockVar(sce.bc, block=sce.bc$request, assay.type="logcounts",
-                            trend.args=list(parametric=TRUE, use.spikes=FALSE))
+  comb.out <- multiBlockVar(sce.bc, block=sce.bc$batches, assay.type="logcounts", trend.args=list(parametric=TRUE, use.spikes=FALSE))
   
+  #comb.out = multiBlockVar(sce.bc, block = sce.bc$batches, trend.args = list(use.spikes = FALSE))
   head(comb.out[,1:6])
   
-  par(mfrow=c(1,3))
+  par(mfrow=c(1, length(bc.uniq)))
   #is.spike <- isSpike(sce.416B.2)
-  for (plate in unique(sce.bc$request)) {
+  for (plate in unique(sce.bc$batches)) {
     cur.out <- comb.out$per.block[[plate]]
     plot(cur.out$mean, cur.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
          ylab="Variance of log-expression", main=plate, ylim = c(0, 25), xlim = c(0, 15))
@@ -202,18 +202,7 @@ if(Use.fastMNN){
   
   kk2check = 2
   plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
-  #nout <- multiBatchNorm(sce.gse81076[universe,], sce.gse85241[universe,],
-  #                       sce.gse86469[universe,], sce.emtab[universe,])
-  #sce.gse81076 <- nout[[1]]
-  #sce.gse85241 <- nout[[2]]
-  #sce.gse86469 <- nout[[3]]
-  #sce.emtab <- nout[[4]]
-  #rescaled <- multiBatchNorm(
-  #  sce.gse85241[universe,], 
-  #  sce.gse81076[universe,]
-  #)
-  #rescaled.gse85241 <- rescaled[[1]]
-  #rescaled.gse81076 <- rescaled[[2]]
+    
   
   # Slightly convoluted call to avoid re-writing code later.
   # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
@@ -222,7 +211,7 @@ if(Use.fastMNN){
                                                approximate=TRUE)))
   dim(mnn.out$corrected)
   mnn.out$batch
-  Rle(mnn.out$batch) 
+  Rle(mnn.out$batch)
   #metadata(mnn.out)$merge.info$pairs[[1]]
   reducedDim(sce, "MNN") <- mnn.out$corrected
   sce$mnn_Batch <- as.character(mnn.out$batch)
@@ -250,7 +239,7 @@ if(Use.fastMNN){
   sce.tmp = sce[gene.chosen, which(sce$mnn_Batch > 2)]
   sce.tmp <- runPCA(sce.tmp, ncomponents = 50, ntop=nrow(sce.tmp), method="irlba", exprs_values = "logcounts", scale_features = TRUE)
   
-  plotPCA(sce.tmp, colour_by="mnn_Batch") + ggtitle("Original")
+  plotPCA(sce.tmp, colour_by="batches") + ggtitle("Original")
   
   dff = as.data.frame(reducedDim(sce.tmp, "MNN"))
   colnames(dff) = paste0("PC", c(1:ncol(dff)))
@@ -282,7 +271,7 @@ if(Use.fastMNN){
     do.pca = FALSE,
     verbose = TRUE, 
     addTest = FALSE,
-    n_repeat = 100,
+    n_repeat = 200,
     plot = TRUE)
   
   #require('FNN')
@@ -291,7 +280,7 @@ if(Use.fastMNN){
   #knn <- get.knn(, k=k0, algorithm = 'cover_tree')
   kbet.bc = kBET(
     df = t(reducedDim(sce.tmp, "MNN")), 
-    batch = sce.tmp$batches,
+    batch = sce.tmp$mnn_Batch,
     do.pca = FALSE,
     heuristic = FALSE,
     verbose = TRUE, 
