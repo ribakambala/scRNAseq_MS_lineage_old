@@ -81,10 +81,24 @@ options(stringsAsFactors = FALSE)
 
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
 
+Add.FACS.informations = FALSE
 Norm.Vars.per.batch = TRUE
 #rescaling.for.multBatch = TRUE
 Use.fastMNN = TRUE
 Test.mnnCorrect = FALSE
+
+##########################################
+# Here we start to add the facs information in the metadata
+# 
+##########################################
+if(Add.FACS.informations){
+  source("scRNAseq_functions.R")
+  
+  sce = integrate.FACS.information(sce)
+  
+  save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
+}
+
 ##########################################
 # Feature selection (select HGVs) for batch corrections
 # there are two options: batch-specific or use batch as block
@@ -291,7 +305,6 @@ if(Use.fastMNN){
   dev.off()
   
 }
-
 
 if(Use.mnnCorrect){
   set.seed(100)

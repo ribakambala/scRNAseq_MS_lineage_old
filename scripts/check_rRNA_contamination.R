@@ -19,7 +19,6 @@ stat = stat[kk, ]
 resDir = "../results/rRNA_contamination"
 if(!dir.exists(resDir)){dir.create(resDir)}
 
-
 pdfname = paste0(resDir, "/check_potential_reasons_for_rRNA_contamination.pdf")
 pdf(pdfname, width = 12, height = 10)
 

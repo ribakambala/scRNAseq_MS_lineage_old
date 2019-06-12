@@ -1005,6 +1005,20 @@ cellCycle.correction = function(sce, method = "seurat")
 # 
 ########################################################
 ########################################################
+integrate.FACS.information = function(sce)
+{
+  facs = list.files(path = "/Volumes/groups/cochella/Aleks/ngs_scseq_data/sampleInfos/indexData_csvs", 
+                    pattern = "*.csv", full.names = TRUE)
+  jj = grep("barcodes_to_well_names", facs)
+  well2barcodes = facs[jj]
+  facs = facs[-jj]
+  well2barcodes = read.csv(well2barcodes, header = TRUE)
+  wells = data.frame(well2barcodes$well_name, well2barcodes$original, stringsAsFactors = FALSE)
+  
+  return(sce)
+}
+
+
 batchCorrection_Scanorama = function()
 {
   ## quick test for one batch correction method Scanorama
