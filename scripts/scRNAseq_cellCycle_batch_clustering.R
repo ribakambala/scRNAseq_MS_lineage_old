@@ -107,7 +107,7 @@ if(Add.FACS.informations){
 batches = sce$seqInfos # choose the batches (either plates or request)
 bc.uniq = unique(batches)
 sce$batches <- batches
-order2correct = c(4,3,2,1)
+order2correct = c(3, 4, 2,1)
 
 if(!Norm.Vars.per.batch){
   ## here we use batches as blockes, i.e. calculated mean and variances separately for each batches and then fit the trend
@@ -172,12 +172,13 @@ if(!Norm.Vars.per.batch){
   #length(which(dec.sorted$bio>0))
   # here HVGs selected with FDR<0.01
   #gene.chosen.bc <- which(dec.bc.sorted$p.value < 0.05)
+  #gene.chosen.bc <- which(dec.bc.sorted$FDR < 0.1)
   gene.chosen.bc = which(dec.bc.sorted$bio>0)
   #length(which(dec.sorted$bio>0))
   length(gene.chosen.bc)
   
   ### compare the block and batch-specific HVGs selection
-  cat(length(gene.chosen), length(gene.chosen.bc), length(intersect(gene.chosen, gene.chosen.bc)), "\n")
+  #cat(length(gene.chosen), length(gene.chosen.bc), length(intersect(gene.chosen, gene.chosen.bc)), "\n")
   #library(VennDiagram)
   #venn.diagram(
   #  x = list(gene.chosen, gene.chosen.bc),
@@ -215,13 +216,14 @@ if(Use.fastMNN){
   }
   
   kk2check = 2
+  par(mfrow=c(1,1))
   plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
     
   
   # Slightly convoluted call to avoid re-writing code later.
   # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
   set.seed(100)
-  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=50, auto.order=order2correct,
+  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=100, auto.order=order2correct,
                                                approximate=TRUE)))
   dim(mnn.out$corrected)
   mnn.out$batch
@@ -246,11 +248,12 @@ if(Use.fastMNN){
                                       compute.variances=TRUE)))
   with.var$lost.var
   
-  pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_inLowDimensions.pdf")
+  pdfname = paste0(resDir, "/scRNAseq_filtered_test_MNNbatchCorrection_effectiveness.pdf")
   pdf(pdfname, width=18, height = 8)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
-  sce.tmp = sce[gene.chosen, which(sce$mnn_Batch > 2)]
+  #sce.tmp = sce[gene.chosen, which(sce$mnn_Batch > 2)]
+  sce.tmp = sce
   sce.tmp <- runPCA(sce.tmp, ncomponents = 50, ntop=nrow(sce.tmp), method="irlba", exprs_values = "logcounts", scale_features = TRUE)
   
   plotPCA(sce.tmp, colour_by="batches") + ggtitle("Original")
@@ -263,7 +266,7 @@ if(Use.fastMNN){
   
   # Using irlba to set up the t-SNE, for speed.
   set.seed(100)
-  osce <- runTSNE(osce, use_dimred="PCA", perplexity = 20)
+  osce <- runTSNE(sce.tmp, use_dimred="PCA", perplexity = 20)
   ot <- plotTSNE(osce, colour_by="mnn_Batch") + ggtitle("Original")
   set.seed(100)
   csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
@@ -271,10 +274,10 @@ if(Use.fastMNN){
   multiplot(ot, ct, cols=2)
   
   set.seed(100)
-  osce <- runUMAP(sce.tmp, use_dimred="PCA", perplexity = 50)
+  osce <- runUMAP(sce.tmp, use_dimred="PCA", perplexity = 20)
   ot <- plotUMAP(osce, colour_by="mnn_Batch") + ggtitle("Original")
   set.seed(100)
-  csce <- runUMAP(sce.tmp, use_dimred="MNN", perplexity = 50)
+  csce <- runUMAP(sce.tmp, use_dimred="MNN", perplexity = 20)
   ct <- plotUMAP(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
   multiplot(ot, ct, cols=2)
   
