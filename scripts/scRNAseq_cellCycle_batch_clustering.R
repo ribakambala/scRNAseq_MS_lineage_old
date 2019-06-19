@@ -119,7 +119,7 @@ plotColData(sce,
 batches = sce$seqInfos # choose the batches (either plates or request)
 bc.uniq = unique(batches)
 sce$batches <- batches
-order2correct = c(3, 4, 2,1)
+order2correct = c(3, 4, 2, 1)
 
 if(!Norm.Vars.per.batch){
   ## here we use batches as blockes, i.e. calculated mean and variances separately for each batches and then fit the trend
@@ -222,6 +222,11 @@ if(Use.fastMNN){
       }
     }
     eval(parse(text = ttxt)) ## rescaling done
+    
+    kk2check = 2
+    par(mfrow=c(1,1))
+    plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
+    
   }
   
   original = list()
@@ -236,10 +241,6 @@ if(Use.fastMNN){
     }
     fscs = c(fscs, sce$FSC_log10[which(sce$batches == bc.uniq[n])])
   }
-  
-  kk2check = 2
-  par(mfrow=c(1,1))
-  plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
   
   # Slightly convoluted call to avoid re-writing code later.
   # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
@@ -259,20 +260,23 @@ if(Use.fastMNN){
   sce$mnn_Batch <- as.character(mnn.out$batch)
   sce
   
-  sce <- runUMAP(sce, use_dimred="MNN", perplexity = 20)
-  #sce$FSC_log10 = sce$FSC_log10 - 5
-  plotUMAP(sce, colour_by="mnn_Batch", size_by = "FSC_log10", point_size= 0.01) + ggtitle("Corrected") 
-  
   ##########################################
   # check the effectiveness of batch correction with MNN
   # 1) check the MNN pairs and lost variances
   # 2) visualization wiht PCA, and UMAP before and after correction
   # 3) kBET test
   ##########################################
+  pdfname = paste0(resDir, "/scRNAseq_filtered_test_MNNbatchCorrection_effectiveness.pdf")
+  pdf(pdfname, width=18, height = 8)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
   # mnn.out$pairs
   source("scRNAseq_functions.R")
   Check.MNN.pairs(mnn.out, fscs)
   
+  sce <- runUMAP(sce, use_dimred="MNN", perplexity = 20)
+  #sce$FSC_log10 = sce$FSC_log10 - 5
+  plotUMAP(sce, colour_by="mnn_Batch", size_by = "FSC_log10", point_size= 0.01) + ggtitle("Corrected") 
   
   #omat <- do.call(cbind, original)
   #sce.qc <- SingleCellExperiment(list(logcounts=omat))
@@ -282,15 +286,11 @@ if(Use.fastMNN){
                                       compute.variances=TRUE)))
   with.var$lost.var
   
-  pdfname = paste0(resDir, "/scRNAseq_filtered_test_MNNbatchCorrection_effectiveness.pdf")
-  pdf(pdfname, width=18, height = 8)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-  
   plotColData(sce,
               x = "FSC_log10",
               y = "BSC_log10",
-              colour_by = "batches",
-              shape_by = "batches"
+              colour_by = "mnn_Batch",
+              shape_by = "mnn_Batch"
               
   ) + geom_hline(yintercept= c(4.9, 5.3)  , linetype="dashed", color = "darkgray", size=0.5) +
       geom_vline(xintercept = c(5.45, 5.75), linetype="dashed", color = "black", size=0.5)

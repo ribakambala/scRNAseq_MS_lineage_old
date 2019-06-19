@@ -1112,11 +1112,18 @@ Integrate.FACS.Information = function(sce, processing.FACS.Info = FALSE)
 
 Check.MNN.pairs = function(mnn.out, fscs)
 {
-  library(igraph)
+  #library(igraph)
   out = mnn.out$pairs
+  set.seed(1001)
+  diffs = abs(sample(fscs, size = 20000, replace = TRUE) - sample(fscs, size = 20000, replace = TRUE))
+  labels = rep('random', length(diffs))
+  #bc.values = as.character(mnn.out$batch)
+  
   for(n in 1:length(out))
   {
     pairs = as.data.frame(out[[n]])
+    diffs = c(diffs, abs(fscs[pairs[,1]] - fscs[pairs[,2]]))
+    labels = c(labels, rep(paste0(n, "- merge batch #", mnn.out$order[(n+1)]), nrow(pairs))) 
     # g <- graph_from_data_frame(pairs, directed = FALSE)
     # #bipartite.mapping(g)
     # V(g)$type <- bipartite_mapping(g)$type
@@ -1125,6 +1132,15 @@ Check.MNN.pairs = function(mnn.out, fscs)
     # plot(g, vertex.label.cex = 0.8, vertex.label.color = "black", cex = 0.1)
     # plot(g, layout=layout.bipartite, vertex.size=1, vertex.label.cex=0.6)
   }
+  
+  diffs.data = data.frame(diffs, labels, stringsAsFactors = TRUE)
+  diffs.data$labels = as.factor(diffs.data$labels)
+  p = ggplot(diffs.data, aes(x=labels, y=diffs)) + 
+    geom_violin(trim=TRUE)
+  
+  plot(p)
+  # boxplot(diffs ~ labels, data=diffs)
+  
 }
 
 batchCorrection_Scanorama = function()
