@@ -1001,23 +1001,131 @@ cellCycle.correction = function(sce, method = "seurat")
 
 ########################################################
 ########################################################
-# Section : bach correction testing
+# Section : function for bach correction
 # 
 ########################################################
 ########################################################
-integrate.FACS.information = function(sce)
+Integrate.FACS.Information = function(sce, processing.FACS.Info = FALSE)
 {
-  facs = list.files(path = "/Volumes/groups/cochella/Aleks/ngs_scseq_data/sampleInfos/indexData_csvs", 
-                    pattern = "*.csv", full.names = TRUE)
-  jj = grep("barcodes_to_well_names", facs)
-  well2barcodes = facs[jj]
-  facs = facs[-jj]
-  well2barcodes = read.csv(well2barcodes, header = TRUE)
-  wells = data.frame(well2barcodes$well_name, well2barcodes$original, stringsAsFactors = FALSE)
+  
+  find_flowcell_lane = function(x)
+  {
+    x = gsub(".csv", "", x)  
+    x = basename(x)
+    x = unlist(strsplit(as.character(x), "_"))
+    x = paste0(x[c((length(x)-1), length(x))], collapse = "_")
+    return(x)
+  }
+  
+  if(processing.FACS.Info){
+    ##########################################
+    # collecting the facs infos from tables
+    ##########################################
+    path2FACS = "/Volumes/groups/cochella/Aleks/ngs_scseq_data/sampleInfos/FACS_indexData"
+    ff1 = paste0(path2FACS, "/barcodes_to_wellNames_96w_robot_test_plus_barcodes_CCVBPANXX_1.csv")
+    facs = read.csv(ff1, header = TRUE, row.names = 1)
+    facs = data.frame(facs, stringsAsFactors = FALSE)
+    flane = find_flowcell_lane(ff1)
+    facs$flowcell_lane = flane
+    
+    keep = facs
+      
+    ffs = list.files(path = path2FACS, pattern = "*.csv", full.names = TRUE)
+    ffs = ffs[grep(flane, ffs, invert = TRUE)]
+    
+    jj = grep("barcodes_to_wellNames", ffs)
+    wells = ffs[jj]
+    facs = ffs[-jj]
+   
+    wells.infos = list()
+    for(n in 1:length(wells))
+    {
+      xx = read.csv(wells[n], header = TRUE)
+      xx = data.frame(xx$well_name, xx$original, stringsAsFactors = FALSE)
+      colnames(xx) = c("index.well", "bc")
+      wells.infos[[n]] = xx
+      if(grepl("384w", wells[n])){
+        names(wells.infos)[n] = "all"
+      }else{
+        names(wells.infos)[n] = find_flowcell_lane(wells[n])
+      }  
+    }
+    #well2barcodes = read.csv(well2barcodes, header = TRUE)
+    #wells = data.frame(well2barcodes$well_name, well2barcodes$original, stringsAsFactors = FALSE)
+    keep2 = c()
+    for(n in 1:length(facs))
+    {
+      # n = 2
+      flane = find_flowcell_lane(facs[n])
+      yy = read.csv(facs[n], header = TRUE)
+      if(flane == "CCVTBANXX_8"){
+        mapping = wells.infos$CCVTBANXX_8
+        yy = data.frame(yy[, c(1:8)], rep(NA, nrow(yy)), rep(NA, nrow(yy)), yy$Index)
+        colnames(yy)[c(9:11)] = colnames(keep)[9:11]
+      }else{
+        mapping = wells.infos$all
+      }
+      yy = data.frame(yy, mapping[match(yy$Index, mapping$index.well),], stringsAsFactors = FALSE)
+      colnames(yy)[c(12:13)] = colnames(keep)[12:13]
+      yy$flowcell_lane = flane
+      keep2 = rbind(keep2, yy)
+    }
+    
+    keep = rbind(keep, keep2)
+    colnames(keep)[11:12] = c("Index.well", "Index.well.new")
+    keep$flowcell_lane_bc = paste0(keep$flowcell_lane, "_", keep$barcode)
+    
+    #save(keep, file = paste0(RdataDir, "merged_FACS_information_all.Rdata"))
+    ##########################################
+    # integrate the facs info into the sce object 
+    ##########################################
+    nb.cells = rep(NA, ncol(sce))
+    FSC = rep(NA, ncol(sce))
+    BSC = rep(NA, ncol(sce))
+    Index.well = rep(NA, ncol(sce))
+    
+    for(n in 1:ncol(sce))
+    {
+      kk = which(keep$flowcell_lane_bc == paste0(sce$flowcell.lane[n], "_", sce$barcodes[n]))
+      cat(n, " : ", length(kk), "\n" )
+      if(length(kk)>0){
+        nb.cells[n] = length(kk)
+        Index.well[n] = unique(keep$Index.well.new[kk])
+        FSC[n] = mean(keep$FSC.A[kk])
+        BSC[n] = mean(keep$BSC.A[kk])
+      }
+    }
+    
+    sce$nb.cells = nb.cells
+    sce$index.well = Index.well
+    sce$FSC = FSC
+    sce$BSC = BSC
+    save(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+     
+  }else{
+    
+    load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+  }
   
   return(sce)
 }
 
+Check.MNN.pairs = function(mnn.out, fscs)
+{
+  library(igraph)
+  out = mnn.out$pairs
+  for(n in 1:length(out))
+  {
+    pairs = as.data.frame(out[[n]])
+    # g <- graph_from_data_frame(pairs, directed = FALSE)
+    # #bipartite.mapping(g)
+    # V(g)$type <- bipartite_mapping(g)$type
+    # V(g)$label <- V(g)$name # set labels.
+    # #plot(g)
+    # plot(g, vertex.label.cex = 0.8, vertex.label.color = "black", cex = 0.1)
+    # plot(g, layout=layout.bipartite, vertex.size=1, vertex.label.cex=0.6)
+  }
+}
 
 batchCorrection_Scanorama = function()
 {

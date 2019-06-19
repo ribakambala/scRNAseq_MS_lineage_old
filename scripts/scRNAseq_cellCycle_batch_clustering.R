@@ -79,9 +79,8 @@ library(kBET)
 set.seed(1234567)
 options(stringsAsFactors = FALSE)
 
-load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
-
-Add.FACS.informations = FALSE
+#load(file = file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+Use.FACS.informations = TRUE
 Norm.Vars.per.batch = TRUE
 #rescaling.for.multBatch = TRUE
 Use.fastMNN = TRUE
@@ -91,13 +90,26 @@ Test.mnnCorrect = FALSE
 # Here we start to add the facs information in the metadata
 # 
 ##########################################
-if(Add.FACS.informations){
-  source("scRNAseq_functions.R")
-  
-  sce = integrate.FACS.information(sce)
-  
-  save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
+if(Use.FACS.informations){
+  #source("scRNAseq_functions.R")
+  #sce = Integrate.FACS.Information(sce)
+  #save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
+  load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+}else{
+  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
 }
+
+sce$FSC_log10 = log10(sce$FSC)
+sce$BSC_log10 = log10(sce$BSC)
+sce = sce[, which(sce$nb.cells == 1)]
+
+plotColData(sce,
+            x = "FSC_log10",
+            y = "BSC_log10",
+            colour_by = "seqInfos",
+            shape_by = "seqInfos"
+            
+)
 
 ##########################################
 # Feature selection (select HGVs) for batch corrections
@@ -187,6 +199,7 @@ if(!Norm.Vars.per.batch){
   gene.chosen = gene.chosen.bc
   
 }
+cat("nb of HGV : ", length(gene.chosen), "\n")
 
 ##########################################
 # Batch correction using fastMNN from scran
@@ -197,33 +210,46 @@ if(Use.fastMNN){
   ## We adjust the size factors with multiBatchNorm() to make them more comparable across batches. 
   ## This mitigates differences in scale and variance in the log-expression values between batches, especially between technologies.
   ## https://www.bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/multibatch.html#3_feature_selection_across_batches
-  ttxt = c("nout = multiBatchNorm(")
-  for(n in 1:length(bc.uniq)){
-    if(n != length(bc.uniq)) {
-      ttxt = paste0(ttxt, "sce[, which(sce$batches == '", bc.uniq[n], "')], ")
-    } else {
-      ttxt = paste0(ttxt, "sce[, which(sce$batches == '", bc.uniq[n], "')])")
+  
+  Rescale.Batches = FALSE
+  if(Rescale.Batches){
+    ttxt = c("nout = multiBatchNorm(")
+    for(n in 1:length(bc.uniq)){
+      if(n != length(bc.uniq)) {
+        ttxt = paste0(ttxt, "sce[, which(sce$batches == '", bc.uniq[n], "')], ")
+      } else {
+        ttxt = paste0(ttxt, "sce[, which(sce$batches == '", bc.uniq[n], "')])")
+      }
     }
+    eval(parse(text = ttxt)) ## rescaling done
   }
-  eval(parse(text = ttxt)) ## rescaling done
   
   original = list()
+  fscs = c()
   #original0 = list()
   for(n in 1:length(bc.uniq)){
     #xx = nout[[n]];
-    original[[n]] = logcounts((nout[[n]][gene.chosen, ]))
-    original[[n]] = logcounts((sce[gene.chosen, which(sce$batches == bc.uniq[n])]))
+    if(Rescale.Batches){
+      original[[n]] = logcounts((nout[[n]][gene.chosen, ]))
+    }else{
+      original[[n]] = logcounts((sce[gene.chosen, which(sce$batches == bc.uniq[n])])) 
+    }
+    fscs = c(fscs, sce$FSC_log10[which(sce$batches == bc.uniq[n])])
   }
   
   kk2check = 2
   par(mfrow=c(1,1))
   plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
-    
   
   # Slightly convoluted call to avoid re-writing code later.
   # Equivalent to fastMNN(GSE81076, GSE85241, k=20, d=50, approximate=TRUE)
-  set.seed(100)
-  mnn.out <- do.call(fastMNN, c(original, list(k=20, cos.norm = TRUE, d=100, auto.order=order2correct,
+  # Comments from Aaron: https://www.bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/batch.html#5_examining_the_effect_of_correction
+  # The k= parameter specifies the number of nearest neighbours to consider when defining MNN pairs. This should be interpreted as the minimum frequency of each cell type or state in each batch.
+  # Larger values will improve the precision of the correction by increasing the number of MNN pairs. It also provides some robustness to violations of the assumption that the batch vector is orthogonal to the biological subspace (Haghverdi et al. 2018), by allowing the neighbour search to ignore biological variation in each batch to identify the correct MNN pairs.
+  # However, larger values of k can also reduce accuracy by allowing incorrect MNN pairs to form between cells of different types. Thus, we suggest starting with the default k and increasing it if one is confident that the same cell types are not adequately merged across batches. This is better than starting with a large k as incorrect merging is much harder to diagnose than insufficient merging.
+  # When BSPARAM=IrlbaParam(deferred=TRUE), fastMNN() uses methods from the irlba package to perform the principal components analysis quickly. While the run-to-run differences should be minimal, it does mean that set.seed() is required to obtain fully reproducible results. The deferred= argument instructs fastMNN() to sacrifice some numerical precision for greater speed.
+  set.seed(1001)
+  mnn.out <- do.call(fastMNN, c(original, list(k=15, cos.norm = TRUE, d=50, auto.order=order2correct,
                                                approximate=TRUE)))
   dim(mnn.out$corrected)
   mnn.out$batch
@@ -233,13 +259,21 @@ if(Use.fastMNN){
   sce$mnn_Batch <- as.character(mnn.out$batch)
   sce
   
+  sce <- runUMAP(sce, use_dimred="MNN", perplexity = 20)
+  #sce$FSC_log10 = sce$FSC_log10 - 5
+  plotUMAP(sce, colour_by="mnn_Batch", size_by = "FSC_log10", point_size= 0.01) + ggtitle("Corrected") 
+  
   ##########################################
   # check the effectiveness of batch correction with MNN
   # 1) check the MNN pairs and lost variances
-  # 2) visualization wiht PCA, tSNE and UMAP before and after correction
+  # 2) visualization wiht PCA, and UMAP before and after correction
   # 3) kBET test
   ##########################################
-  mnn.out$pairs
+  # mnn.out$pairs
+  source("scRNAseq_functions.R")
+  Check.MNN.pairs(mnn.out, fscs)
+  
+  
   #omat <- do.call(cbind, original)
   #sce.qc <- SingleCellExperiment(list(logcounts=omat))
   set.seed(1000)
@@ -252,8 +286,21 @@ if(Use.fastMNN){
   pdf(pdfname, width=18, height = 8)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
+  plotColData(sce,
+              x = "FSC_log10",
+              y = "BSC_log10",
+              colour_by = "batches",
+              shape_by = "batches"
+              
+  ) + geom_hline(yintercept= c(4.9, 5.3)  , linetype="dashed", color = "darkgray", size=0.5) +
+      geom_vline(xintercept = c(5.45, 5.75), linetype="dashed", color = "black", size=0.5)
+  
+  sel.tmp = which(sce$BSC_log10>4.9 & sce$BSC_log10 < 5.3 & sce$FSC_log10>5.45 & sce$FSC_log10<5.75)
   #sce.tmp = sce[gene.chosen, which(sce$mnn_Batch > 2)]
+  sce.tmp = sce[, sel.tmp]
   sce.tmp = sce
+  dim(sce.tmp)
+  
   sce.tmp <- runPCA(sce.tmp, ncomponents = 50, ntop=nrow(sce.tmp), method="irlba", exprs_values = "logcounts", scale_features = TRUE)
   
   plotPCA(sce.tmp, colour_by="batches") + ggtitle("Original")
@@ -261,24 +308,24 @@ if(Use.fastMNN){
   dff = as.data.frame(reducedDim(sce.tmp, "MNN"))
   colnames(dff) = paste0("PC", c(1:ncol(dff)))
   dff$batches = sce.tmp$batches
-  ggp = ggplot(data=dff, aes(PC1, PC2, color=batches)) + geom_point(size=3) 
+  ggp = ggplot(data=dff, aes(PC1, PC2, color=batches)) + geom_point(size=2) 
   plot(ggp);
   
   # Using irlba to set up the t-SNE, for speed.
-  set.seed(100)
-  osce <- runTSNE(sce.tmp, use_dimred="PCA", perplexity = 20)
-  ot <- plotTSNE(osce, colour_by="mnn_Batch") + ggtitle("Original")
-  set.seed(100)
-  csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
-  ct <- plotTSNE(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
-  multiplot(ot, ct, cols=2)
+  #set.seed(100)
+  #osce <- runTSNE(sce.tmp, use_dimred="PCA", perplexity = 20)
+  #ot <- plotTSNE(osce, colour_by="mnn_Batch") + ggtitle("Original")
+  #set.seed(100)
+  #csce <- runTSNE(sce, use_dimred="MNN", perplexity = 20)
+  #ct <- plotTSNE(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
+  #multiplot(ot, ct, cols=2)
   
   set.seed(100)
   osce <- runUMAP(sce.tmp, use_dimred="PCA", perplexity = 20)
-  ot <- plotUMAP(osce, colour_by="mnn_Batch") + ggtitle("Original")
+  ot <- plotUMAP(osce, colour_by="mnn_Batch", size_by = "FSC_log10") + ggtitle("Original")
   set.seed(100)
   csce <- runUMAP(sce.tmp, use_dimred="MNN", perplexity = 20)
-  ct <- plotUMAP(csce, colour_by="mnn_Batch") + ggtitle("Corrected")
+  ct <- plotUMAP(csce, colour_by="mnn_Batch", size_by = "FSC_log10") + ggtitle("Corrected")
   multiplot(ot, ct, cols=2)
   
   kbet.orig <- kBET(
@@ -304,6 +351,8 @@ if(Use.fastMNN){
     addTest = FALSE,
     n_repeat = 200,
     plot = TRUE)
+  
+  
   
   dev.off()
   
