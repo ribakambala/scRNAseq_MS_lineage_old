@@ -305,6 +305,7 @@ library(SingleCellExperiment)
 load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_bcMNN.Rdata')) 
 
 Seurat.clustering = TRUE
+Test.scran.clustering = FALSE
 ##########################################
 # test clustering methods in scran 
 # https://master.bioconductor.org/packages/release/workflows/vignettes/simpleSingleCell/inst/doc/work-1-reads.html/
@@ -313,64 +314,13 @@ if(Seurat.clustering)
 { 
   #sce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "corrected")
   #set.seed(100)
-  #sce <- runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-  #set.seed(100)
-  #sce <- runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-  #set.seed(100)
-  #sce = runUMAP(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-  
-  #sce = runDiffusionMap(sce, use_dimred = "MNN", n_dimred = 20)
-  
+    
   pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_testing.pdf")
   pdf(pdfname, width=10, height = 6)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-  
-  ##########################################
-  # test grapha method from scran
-  ##########################################
-  snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
-  clusters <- igraph::cluster_walktrap(snn.gr)
-  table(clusters$membership, sce$Batch)
-  
-  sce$cluster <- factor(clusters$membership)
-  plotTSNE(sce, colour_by="cluster") + ggtitle("scran -- graph based clustering")
-  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
-    fontsize + ggtitle("scran -- graph based clustering")
-  
-  ##########################################
-  # test hierachy clustering from scran
-  ##########################################
-  pcs <- reducedDim(sce, "MNN")
-  my.dist <- dist(pcs)
-  my.tree <- hclust(my.dist, method="ward.D2")
-  
-  #hist(my.tree)
-  library(dynamicTreeCut)
-  my.clusters <- unname(cutreeDynamic(my.tree, cutHeight = 3, 
-                                      distM=as.matrix(my.dist), 
-                                      minClusterSize=5, verbose=0))
-  
-  table(my.clusters, sce$Batch)
-  
-  sce$cluster <- factor(my.clusters)
-  
-  plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("scran -- hcluster")
-  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
-    fontsize + ggtitle("scran -- hcluster")
-  
-  #plotDiffusionMap(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize
-  
-  library(cluster)
-  clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
-  sil <- silhouette(my.clusters, dist = my.dist)
-  sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
-  sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
-  plot(sil, main = paste(length(unique(my.clusters)), "clusters"), 
-       border=sil.cols, col=sil.cols, do.col.sort=FALSE) 
-  
-  
+
   ##########################################
   # test graph-based Louvain algorithm 
   ##########################################
@@ -378,19 +328,63 @@ if(Seurat.clustering)
   library(cowplot)
   #srt = Seurat::Convert(from = sce, to = "seurat") 
   pbmc = as.Seurat(sce)
-  
-  #Seurat::DimPlot(pbmc, dims = c(1, 2), reduction = "MNN")
   pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 10, dims = 1:10)
   pbmc = FindClusters(pbmc, resolution = 1, algorithm = 3)
   sce$cluster_seurat <- factor(pbmc@active.ident)
   sce$cluster <- factor(pbmc@active.ident)
-  
-  plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("seurat - graph base clustering")
-  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+  plotUMAP(sce, colour_by="cluster", size_by = "FSC_log10") + 
     fontsize + ggtitle("seurat -- graph based clustering")
   
   dev.off()
   
+  
+  
+  if(Test.scran.clustering){
+    ##########################################
+    # test grapha method from scran
+    ##########################################
+    snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
+    clusters <- igraph::cluster_walktrap(snn.gr)
+    table(clusters$membership, sce$Batch)
+    
+    sce$cluster <- factor(clusters$membership)
+    plotTSNE(sce, colour_by="cluster") + ggtitle("scran -- graph based clustering")
+    plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+      fontsize + ggtitle("scran -- graph based clustering")
+    
+    ##########################################
+    # test hierachy clustering from scran
+    ##########################################
+    pcs <- reducedDim(sce, "MNN")
+    my.dist <- dist(pcs)
+    my.tree <- hclust(my.dist, method="ward.D2")
+    
+    #hist(my.tree)
+    library(dynamicTreeCut)
+    my.clusters <- unname(cutreeDynamic(my.tree, cutHeight = 3, 
+                                        distM=as.matrix(my.dist), 
+                                        minClusterSize=5, verbose=0))
+    
+    table(my.clusters, sce$Batch)
+    
+    sce$cluster <- factor(my.clusters)
+    
+    plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("scran -- hcluster")
+    plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+      fontsize + ggtitle("scran -- hcluster")
+    
+    #plotDiffusionMap(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize
+    
+    library(cluster)
+    clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
+    sil <- silhouette(my.clusters, dist = my.dist)
+    sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
+    sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
+    plot(sil, main = paste(length(unique(my.clusters)), "clusters"), 
+         border=sil.cols, col=sil.cols, do.col.sort=FALSE) 
+    
+  }
+ 
 }
 ##########################################
 # DE analysis (or marker gene finding) following the cluster analysis
