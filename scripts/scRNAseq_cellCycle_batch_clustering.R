@@ -81,10 +81,6 @@ options(stringsAsFactors = FALSE)
 
 #load(file = file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
 Use.FACS.informations = TRUE
-Norm.Vars.per.batch = TRUE
-#rescaling.for.multBatch = TRUE
-Use.fastMNN = TRUE
-Test.mnnCorrect = FALSE
 
 ##########################################
 # Here we start to add the facs information in the metadata
@@ -100,7 +96,6 @@ if(Use.FACS.informations){
 }
 
 # logcounts(sce) =  assay(sce, "logcounts_seurat_SG2MCorrected")
-
 sce$FSC_log10 = log10(sce$FSC)
 sce$BSC_log10 = log10(sce$BSC)
 sce = sce[, which(sce$nb.cells == 1)]
@@ -118,6 +113,9 @@ plotColData(sce,
 # there are two options: batch-specific or use batch as block
 # https://www.bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/batch.html
 ##########################################
+Norm.Vars.per.batch = TRUE
+Use.fastMNN = TRUE
+
 batches = sce$seqInfos # choose the batches (either plates or request)
 bc.uniq = unique(batches)
 sce$batches <- batches
@@ -285,6 +283,7 @@ if(Use.fastMNN){
   
 }
 
+save(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_bcMNN.Rdata')) 
 ########################################################
 ########################################################
 # Section : clustering and DE analysis or gene markers discovery
@@ -295,8 +294,6 @@ if(Use.fastMNN){
 # http://bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/de.html#2_blocking_on_uninteresting_factors_of_variation
 ########################################################
 ########################################################
-load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
-
 library(scater)
 library(scran)
 library(scRNA.seq.funcs)
@@ -305,24 +302,22 @@ library(matrixStats)
 library(RColorBrewer)
 library(SingleCellExperiment)
 #set.seed(100)
+load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_bcMNN.Rdata')) 
 
+Seurat.clustering = TRUE
 ##########################################
 # test clustering methods in scran 
 # https://master.bioconductor.org/packages/release/workflows/vignettes/simpleSingleCell/inst/doc/work-1-reads.html/
 ##########################################
-TEST.Aaron.scRNAseq.workflow.clustering.part = FALSE
-if(TEST.Aaron.workflow)
+if(Seurat.clustering)
 { 
-  sce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "corrected")
-  
+  #sce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "corrected")
   #set.seed(100)
   #sce <- runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-  
-  set.seed(100)
-  sce <- runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-  
-  set.seed(100)
-  sce = runUMAP(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
+  #set.seed(100)
+  #sce <- runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
+  #set.seed(100)
+  #sce = runUMAP(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
   
   #sce = runDiffusionMap(sce, use_dimred = "MNN", n_dimred = 20)
   
@@ -451,6 +446,7 @@ if(Find.Gene.Markers.with.scran){
   dev.off()
   
 }
+
 
 ##########################################
 # here select subset of whole dataset to redo clustering
