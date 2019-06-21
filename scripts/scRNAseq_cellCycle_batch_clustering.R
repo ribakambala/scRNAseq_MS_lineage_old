@@ -122,84 +122,8 @@ batches = sce$seqInfos # choose the batches (either plates or request)
 bc.uniq = unique(batches)
 sce$batches <- batches
 
-if(!Norm.Vars.per.batch){
-  ## here we use batches as blockes, i.e. calculated mean and variances separately for each batches and then fit the trend
-  ## In doing so, we implicitly assume that the trend is the same between batches
-  ## https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/var.html#41_using_the_block=_argument
-  fit <- trendVar(sce, block=sce$batches, parametric=TRUE, assay.type="logcounts", use.spikes=FALSE)
-  dec <- decomposeVar(sce, fit)
-  
-  par(mfrow=c(1,2))
-  cols = c(1:length(bc.uniq)) 
-  nb.genes = min(table(sce$batches))
-  
-  matplot(fit$means[c(1:nb.genes), ], fit$vars[c(1:nb.genes), ], col=cols,
-          xlab="Mean log-expression", ylab="Variance of log-expression")
-  curve(fit$trend(x), add=TRUE, col="red")
-  
-  plot(dec$mean, dec$total, xlab="Mean log-expression", 
-       ylab="Variance of log-expression", pch=16)
-  curve(fit$trend(x), col="dodgerblue", add=TRUE)
-  
-  tmp.sce <- sce
-  tmp.sce$log_size_factor <- log(sizeFactors(sce))
-  plotColData(tmp.sce, x="batches", y="log_size_factor")
-  #p2 <- plotColData(tmp.416B, x="Plate", y="log_size_factor_ERCC")
-  #multiplot(p1, p2, cols=2)
-  
-  dec.sorted <- dec[order(dec$bio, decreasing=TRUE),]
-  head(dec.sorted)
-  
-  # here HVGs selected with FDR<0.01
-  gene.chosen <- which(dec.sorted$FDR < 0.05)
-  length(gene.chosen)
-
-}else{
-  ## here we search batch-specific features
-  ## https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/var.html#42_fitting_batch-specific_trends
-  sce.bc = sce
-  ## recommendation in the function help: Centering should be performed by running multiBlockNorm before calling this function. 
-  sce.bc <- multiBlockNorm(sce.bc, block = sce.bc$batches)
-  
-  par(mfrow=c(1,1))
-  plot(sizeFactors(sce), sizeFactors(sce.bc), log='xy'); abline(0, 1, lwd =2, col = 'red') # did not change anything here, weired
-  
-  comb.out <- multiBlockVar(sce.bc, block=sce.bc$batches, assay.type="logcounts", trend.args=list(parametric=TRUE, use.spikes=FALSE))
-  
-  #comb.out = multiBlockVar(sce.bc, block = sce.bc$batches, trend.args = list(use.spikes = FALSE))
-  head(comb.out[,1:6])
-  
-  par(mfrow=c(1, length(bc.uniq)))
-  #is.spike <- isSpike(sce.416B.2)
-  for (plate in unique(sce.bc$batches)) {
-    cur.out <- comb.out$per.block[[plate]]
-    plot(cur.out$mean, cur.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
-         ylab="Variance of log-expression", main=plate, ylim = c(0, 25), xlim = c(0, 15))
-    curve(metadata(cur.out)$trend(x), col="dodgerblue", lwd=2, add=TRUE)
-    #points(cur.out$mean[is.spike], cur.out$total[is.spike], col="red", pch=16)
-  }
-  
-  dec.bc.sorted <- comb.out[order(comb.out$bio, decreasing=TRUE), ]
-  head(dec.bc.sorted)
-  
-  #length(which(dec.sorted$bio>0))
-  # here HVGs selected with FDR<0.01
-  #gene.chosen.bc <- which(dec.bc.sorted$p.value < 0.05)
-  #gene.chosen.bc <- which(dec.bc.sorted$FDR < 0.1)
-  gene.chosen.bc = which(dec.bc.sorted$bio>0)
-  #length(which(dec.sorted$bio>0))
-  length(gene.chosen.bc)
-  
-  ### compare the block and batch-specific HVGs selection
-  #cat(length(gene.chosen), length(gene.chosen.bc), length(intersect(gene.chosen, gene.chosen.bc)), "\n")
-  #library(VennDiagram)
-  #venn.diagram(
-  #  x = list(gene.chosen, gene.chosen.bc),
-  #  category.names = c("batch-block" , "batch-specific"), filename = paste0(resDir, "/batch_block_specific.png"), output = TRUE)
-  
-  gene.chosen = gene.chosen.bc
-  
-}
+source("scRNAseq_functions.R")
+gene.chosen = find.HVGs(sce, Norm.Vars.per.batch = TRUE, method = "scran")
 
 cat("nb of HGV : ", length(gene.chosen), "\n")
 
@@ -532,7 +456,7 @@ if(Find.Gene.Markers.with.scran){
 # here select subset of whole dataset to redo clustering
 # and marker gene finding
 # this is the beginning of iterative clustering, 
-# the gene marker finding will be a criterion to stop iteration 
+# the gene marker finding will be a criterion to stop iteration
 ##########################################
 Select.Early.timePoints = FALSE
 if(Select.Early.timePoints){
