@@ -338,7 +338,6 @@ if(Seurat.clustering)
   dev.off()
   
   
-  
   if(Test.scran.clustering){
     ##########################################
     # test grapha method from scran
