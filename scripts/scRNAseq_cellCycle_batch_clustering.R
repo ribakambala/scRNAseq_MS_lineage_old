@@ -328,12 +328,12 @@ if(Seurat.clustering)
   library(cowplot)
   #srt = Seurat::Convert(from = sce, to = "seurat") 
   pbmc = as.Seurat(sce)
-  pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 10, dims = 1:10)
-  pbmc = FindClusters(pbmc, resolution = 1, algorithm = 3)
+  pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 20, dims = 1:10)
+  pbmc = FindClusters(pbmc, resolution = 2, algorithm = 3)
   sce$cluster_seurat <- factor(pbmc@active.ident)
   sce$cluster <- factor(pbmc@active.ident)
   plotUMAP(sce, colour_by="cluster", size_by = "FSC_log10") + 
-    fontsize + ggtitle("seurat -- graph based clustering")
+    fontsize + ggtitle("Seurat clustering")
   
   dev.off()
   
