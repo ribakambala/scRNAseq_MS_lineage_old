@@ -1143,6 +1143,97 @@ Check.MNN.pairs = function(mnn.out, fscs)
   
 }
 
+batchCorrection_mnnCorrect = function()
+{
+  if(Use.mnnCorrect){
+    set.seed(100)
+    require(BiocParallel)
+    require(stats)
+    bpp <- MulticoreParam(5)
+    bpp
+    
+    mnn.out2 = mnnCorrect(R6879, R7116, R7130, k = 20, sigma = 0.1, cos.norm.in = TRUE, cos.norm.out = TRUE, order = c(3, 2, 1), 
+                          svd.dim = 0, var.adj = FALSE, subset.row = gene.chosen, pc.approx = TRUE, BPPARAM=bpp)
+    
+    head(mnn.out2$pairs[[2]])
+    
+    ## check the pairs of cells used between batches
+    Check.SNN.pairs = FALSE
+    if(Check.SNN.pairs){
+      for(n in 2:length(mnn.out$pairs))
+      {
+        #n = 3
+        paires = data.frame(mnn.out2$pairs[[n]])
+        
+        cat("cell in the batch", n, ":  ",
+            "total pairs --", nrow(paires), ",",  
+            "paired cell in batch", n-1, "-- ", length(unique(paires[which(paires[,3]==(n-1)), 2])), ",", 
+            "paired cell in batch", n+1, "-- ", length(unique(paires[which(paires[,3]==(n+1)), 2])), "\n"
+        )
+      }
+    }
+    
+    res1 <- mnn.out2$corrected[[1]]
+    res2 <- mnn.out2$corrected[[2]]
+    res3 <- mnn.out2$corrected[[3]]
+    
+    dimnames(res1) <- dimnames(R6879)
+    dimnames(res2) <- dimnames(R7116)
+    dimnames(res3) <- dimnames(R7130)
+    res = cbind(res1, res2, res3)
+    
+    assay(sce, "corrected") <- res
+    
+    #sce = sce.qc
+    #save(sce, mnn.out, mnn.out2, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_batchCorrectMNN_SCE.Rdata'))
+    
+    ##########################################
+    # double check the relatinship between fastMNN and mnnCorrect 
+    ##########################################
+    #osce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "logcounts", feature_set = gene.chosen)
+    csce <- runPCA(sce, ncomponents = 50, method="irlba", exprs_values = "corrected", feature_set = gene.chosen,
+                   scale_features = TRUE, detect_outliers = FALSE)
+    
+    xx = as.data.frame(reducedDim(csce, "MNN"));
+    yy = as.data.frame(reducedDim(csce, "PCA"))
+    
+    head(xx[, c(1:10)])
+    head(yy[, c(1:10)])
+    
+    par(mfrow = c(1, 2))
+    plot(xx[, c(1:2)], xlab = 'PC1', ylab = "PC2", main = "lowDim output from fastMNN")
+    plot(yy[, c(1:2)], xlab = 'PC1', ylab = "PC2", main = "PCA from mnnCorret output")
+    #plot(xx[, c(3:4)], xlab = 'PC1', ylab = "PC2", main = "lowDim output from fastMNN")
+    #plot(yy[, c(3:4)], xlab = 'PC1', ylab = "PC2", main = "PCA from mnnCorret output")
+    
+    
+    pdfname = paste0(resDir, "/scRNAseq_filtered_test_batchCorrection_fastMNNlowDim_vs_mnnCorrectOutput.pdf")
+    pdf(pdfname, width=18, height = 8)
+    par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+    
+    od = scater::plotPCA(
+      osce,
+      run_args = list(exprs_values = "logcounts"), 
+      size_by = "total_counts",
+      #size_by = "total_features_by_counts",
+      colour_by = "Batch"
+    ) + ggtitle(paste0("PCA -- origine "))
+    
+    cd = scater::plotPCA(
+      csce,
+      run_args = list(exprs_values = "corrected"),
+      size_by = "total_counts",
+      #size_by = "total_features_by_counts",
+      colour_by = "request"
+    ) + ggtitle(paste0("PCA -- corrected by mnn"))
+    
+    multiplot(od, cd, cols=2)
+    
+    dev.off()
+    
+  }
+}
+
 batchCorrection_Scanorama = function()
 {
   ## quick test for one batch correction method Scanorama
