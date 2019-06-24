@@ -410,6 +410,7 @@ if(Find.Gene.Markers.with.scran){
     #head(marker.set, 5)
     top.markers <- c(top.markers, rownames(marker.set)[marker.set$Top <= ntops])  
   }
+  
   top.markers = unique(top.markers)
   
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
