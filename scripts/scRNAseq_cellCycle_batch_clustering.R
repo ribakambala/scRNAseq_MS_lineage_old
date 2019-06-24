@@ -313,136 +313,81 @@ load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalize
 Seurat.clustering = TRUE
 Test.scran.clustering = FALSE
 ##########################################
-# test clustering methods in scran 
+# (test clustering method) but Seurat method is used at the end 
 # https://master.bioconductor.org/packages/release/workflows/vignettes/simpleSingleCell/inst/doc/work-1-reads.html/
+# DE analysis is tested with scran but will be considered to be replaced by MAST or Seurat
+# DE analysis (or marker gene finding) following the cluster analysis
+
 ##########################################
 if(Seurat.clustering)
 { 
-  #sce = runPCA(sce, ncomponents = 50, ntop=Inf, method="irlba", exprs_values = "corrected")
-  #set.seed(100)
-    
-  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_testing.pdf")
-  pdf(pdfname, width=10, height = 6)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-  
-  fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-
-  ##########################################
-  # test graph-based Louvain algorithm 
-  ##########################################
   require(Seurat)
   library(cowplot)
-  #srt = Seurat::Convert(from = sce, to = "seurat") 
-  pbmc = as.Seurat(sce)
-  pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 20, dims = 1:10)
-  pbmc = FindClusters(pbmc, resolution = 2, algorithm = 3)
-  sce$cluster_seurat <- factor(pbmc@active.ident)
-  sce$cluster <- factor(pbmc@active.ident)
-  plotUMAP(sce, colour_by="cluster", size_by = "FSC_log10") + 
-    fontsize + ggtitle("Seurat clustering")
   
-  dev.off()
+  check.individualExample.geneMarker = FALSE
+  ntops = 3 # nb of top gene markers
+  resolutions = c(0.4, 0.6, 0.8, seq(1.0, 4.0, by = 0.5))
   
+  for(rr in resolutions){
+    rr = 4.0
+    
+    pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering.Seurat_geneMarkers.scran_resolution", 
+                     rr, ".pdf")
+    pdf(pdfname, width=22, height = 18)
+    par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+    
+    fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+    
+    ##########################################
+    # test graph-based Louvain algorithm 
+    ##########################################
+    pbmc = as.Seurat(sce)
+    pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 20, dims = 1:20)
+    
+    cat("--- resolution is :", rr, "---\n")
+    pbmc = FindClusters(pbmc, resolution = rr, algorithm = 3)
+    sce$cluster_seurat <- factor(pbmc@active.ident)
+    sce$cluster <- factor(pbmc@active.ident)
+    plotUMAP(sce, colour_by="cluster", size_by = "FSC_log10") + 
+      fontsize + ggtitle("Seurat clustering")
+    
+    my.clusters = as.numeric(as.character(sce$cluster_seurat))
+    
+    cat(table(my.clusters), "\n")
+    
+    # run the find markers and then collect markers for each clusters
+    #design <- model.matrix( ~ sce$batches)
+    #design <- design[,-1,drop=FALSE]
+    markers <- findMarkers(sce, my.clusters, block=sce$batches, direction="up")
+    top.markers = c()
+    
+    for(n in unique(my.clusters)){
+      #n = 0
+      marker.set <- markers[[as.character(n)]]
+      #marker.set <- markers[["1"]]
+      #head(marker.set, 5)
+      top.markers <- c(top.markers, rownames(marker.set)[marker.set$Top <= ntops])  
+    }
+    
+    top.markers = unique(top.markers)
+    cat(length(top.markers), " gene markers found by scran \n")
+    
+    plotHeatmap(sce, features=top.markers,
+                columns=order(sce$cluster_seurat), 
+                colour_columns_by=c("cluster"),
+                cluster_cols=FALSE, show_colnames = FALSE,
+                center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
+    
+    if(check.individualExample.geneMarker){
+      for(n in 1:length(top.markers)) {
+        xx = plotTSNE(sce, colour_by = top.markers[n]) 
+        plot(xx)
+      }
+    }
+    
+    dev.off()
   
-  if(Test.scran.clustering){
-    ##########################################
-    # test grapha method from scran
-    ##########################################
-    snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
-    clusters <- igraph::cluster_walktrap(snn.gr)
-    table(clusters$membership, sce$Batch)
-    
-    sce$cluster <- factor(clusters$membership)
-    plotTSNE(sce, colour_by="cluster") + ggtitle("scran -- graph based clustering")
-    plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
-      fontsize + ggtitle("scran -- graph based clustering")
-    
-    ##########################################
-    # test hierachy clustering from scran
-    ##########################################
-    pcs <- reducedDim(sce, "MNN")
-    my.dist <- dist(pcs)
-    my.tree <- hclust(my.dist, method="ward.D2")
-    
-    #hist(my.tree)
-    library(dynamicTreeCut)
-    my.clusters <- unname(cutreeDynamic(my.tree, cutHeight = 3, 
-                                        distM=as.matrix(my.dist), 
-                                        minClusterSize=5, verbose=0))
-    
-    table(my.clusters, sce$Batch)
-    
-    sce$cluster <- factor(my.clusters)
-    
-    #plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("scran -- hcluster")
-    plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
-      fontsize + ggtitle("scran -- hcluster")
-    
-    #plotDiffusionMap(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize
-    library(cluster)
-    clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
-    sil <- silhouette(my.clusters, dist = my.dist)
-    sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
-    sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
-    plot(sil, main = paste(length(unique(my.clusters)), "clusters"), 
-         border=sil.cols, col=sil.cols, do.col.sort=FALSE) 
-    
   }
-  
-}
-##########################################
-# DE analysis (or marker gene finding) following the cluster analysis
-# To do it, we also have several options
-# 1) scran 
-##########################################
-Find.Gene.Markers.with.scran = FALSE
-if(Find.Gene.Markers.with.scran){
-  my.clusters = as.numeric(as.character(sce$cluster_seurat))
-  
-  design <- model.matrix( ~ sce$Batch)
-  design <- design[,-1,drop=FALSE]
-  
-  # run the find markers and then collect markers for each clusters
-  markers <- findMarkers(sce, my.clusters, design = design)
-  
-  ntops = 5;
-  top.markers = c()
-  
-  for(n in unique(my.clusters)){
-    #n = 0
-    marker.set <- markers[[as.character(n)]]
-    #marker.set <- markers[["1"]]
-    #head(marker.set, 5)
-    top.markers <- c(top.markers, rownames(marker.set)[marker.set$Top <= ntops])  
-  }
-  
-  top.markers = unique(top.markers)
-  
-  fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-  
-  pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering_markerGenes_examples.pdf")
-  pdf(pdfname, width=16, height = 12)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
-  
-  plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + 
-    ggtitle("seurat - graph base clustering") +
-    theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-  
-  plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
-    fontsize + ggtitle("seurat -- graph based clustering")
-  
-  plotHeatmap(sce, features=top.markers,
-              columns=order(sce$cluster_seurat), 
-              colour_columns_by=c("cluster"),
-              cluster_cols=FALSE, show_colnames = FALSE,
-              center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
-  
-  for(n in 1:length(top.markers)) {
-    xx = plotTSNE(sce, colour_by = top.markers[n]) 
-    plot(xx)
-  }
-  
-  dev.off()
   
 }
 

@@ -1396,6 +1396,53 @@ find.HVGs = function(sce, Norm.Vars.per.batch = TRUE, method = "scran")
 # test code and not used anymore 
 ########################################################
 ########################################################
+test.clustering.method.scran = function(sce){
+  if(Test.scran.clustering){
+    ##########################################
+    # test grapha method from scran
+    ##########################################
+    snn.gr <- buildSNNGraph(sce, use.dimred="MNN")
+    clusters <- igraph::cluster_walktrap(snn.gr)
+    table(clusters$membership, sce$Batch)
+    
+    sce$cluster <- factor(clusters$membership)
+    plotTSNE(sce, colour_by="cluster") + ggtitle("scran -- graph based clustering")
+    plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+      fontsize + ggtitle("scran -- graph based clustering")
+    
+    ##########################################
+    # test hierachy clustering from scran
+    ##########################################
+    pcs <- reducedDim(sce, "MNN")
+    my.dist <- dist(pcs)
+    my.tree <- hclust(my.dist, method="ward.D2")
+    
+    #hist(my.tree)
+    library(dynamicTreeCut)
+    my.clusters <- unname(cutreeDynamic(my.tree, cutHeight = 3, 
+                                        distM=as.matrix(my.dist), 
+                                        minClusterSize=5, verbose=0))
+    
+    table(my.clusters, sce$Batch)
+    
+    sce$cluster <- factor(my.clusters)
+    
+    #plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("scran -- hcluster")
+    plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
+      fontsize + ggtitle("scran -- hcluster")
+    
+    #plotDiffusionMap(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize
+    library(cluster)
+    clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
+    sil <- silhouette(my.clusters, dist = my.dist)
+    sil.cols <- clust.col[ifelse(sil[,3] > 0, sil[,1], sil[,2])]
+    sil.cols <- sil.cols[order(-sil[,1], sil[,3])]
+    plot(sil, main = paste(length(unique(my.clusters)), "clusters"), 
+         border=sil.cols, col=sil.cols, do.col.sort=FALSE) 
+    
+  }
+}
+
 ##########################################
 # test seurat for clustering 
 # original codes in https://satijalab.org/seurat/pbmc3k_tutorial.html
@@ -1452,7 +1499,6 @@ if(Test.Seurat.workflow){
   DimPlot(object = pbmc_phate, reduction.use = 'phate', pt.size = 2.0)
   #DimPlot(object = pbmc_phate, reduction.use = 'pca')
 }
-
 
 ##################################################
 # test Hamberg's single-cell RNA seq analysis, clustering part
