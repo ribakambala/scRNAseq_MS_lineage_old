@@ -355,7 +355,8 @@ if(Seurat.clustering)
     
     cat(table(my.clusters), "\n")
     
-    # run the find markers and then collect markers for each clusters
+    ## run the find markers and then collect markers for each clusters (scran) 
+    # https://bioconductor.org/packages/3.10/workflows/vignettes/simpleSingleCell/inst/doc/de.html#blocking-on-uninteresting-factors-of-variation
     #design <- model.matrix( ~ sce$batches)
     #design <- design[,-1,drop=FALSE]
     markers <- findMarkers(sce, my.clusters, block=sce$batches, direction="up")
