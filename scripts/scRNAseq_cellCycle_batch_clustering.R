@@ -374,12 +374,11 @@ if(Seurat.clustering)
     
     sce$cluster <- factor(my.clusters)
     
-    plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("scran -- hcluster")
+    #plotTSNE(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize + ggtitle("scran -- hcluster")
     plotUMAP(sce, colour_by="cluster", size_by = "total_features_by_counts", shape_by = "Batch") + 
       fontsize + ggtitle("scran -- hcluster")
     
     #plotDiffusionMap(sce, colour_by="cluster", size_by = "total_features_by_counts") + fontsize
-    
     library(cluster)
     clust.col <- scater:::.get_palette("tableau10medium") # hidden scater colours
     sil <- silhouette(my.clusters, dist = my.dist)
@@ -389,7 +388,7 @@ if(Seurat.clustering)
          border=sil.cols, col=sil.cols, do.col.sort=FALSE) 
     
   }
- 
+  
 }
 ##########################################
 # DE analysis (or marker gene finding) following the cluster analysis
