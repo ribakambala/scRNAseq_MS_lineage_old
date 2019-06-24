@@ -96,9 +96,10 @@ if(Use.FACS.informations){
 }
 
 # logcounts(sce) =  assay(sce, "logcounts_seurat_SG2MCorrected")
-sce$FSC_log10 = log10(sce$FSC)
-sce$BSC_log10 = log10(sce$BSC)
 sce = sce[, which(sce$nb.cells == 1)]
+sce$FSC_log10 = 3/2*log2(sce$FSC)
+sce$BSC_log10 = 3/2*log2(sce$BSC)
+
 
 plotColData(sce,
             x = "FSC_log10",
@@ -213,16 +214,20 @@ if(Use.fastMNN){
                                       compute.variances=TRUE)))
   with.var$lost.var
   
+  fsc.boundary = c(27.2, 28.5)
+  bsc.boundary = c(24.5, 27)
   plotColData(sce,
               x = "FSC_log10",
               y = "BSC_log10",
               colour_by = "mnn_Batch",
               shape_by = "mnn_Batch"
               
-  ) + geom_hline(yintercept= c(4.8, 5.3)  , linetype="dashed", color = "darkgray", size=0.5) +
-      geom_vline(xintercept = c(5.45, 5.75), linetype="dashed", color = "black", size=0.5)
+  ) + geom_vline(xintercept = fsc.boundary, linetype="dashed", color = "blue", size=0.5) +
+    geom_hline(yintercept= bsc.boundary, linetype="dashed", color = "red", size=0.5) 
+      
   
-  sel.tmp = which(sce$BSC_log10>4.9 & sce$BSC_log10 < 5.3 & sce$FSC_log10>5.45 & sce$FSC_log10<5.75)
+  sel.tmp = which(sce$FSC_log10 > fsc.boundary[1] & sce$FSC_log10 < fsc.boundary[2] 
+                  & sce$BSC_log10 > bsc.boundary[1] & sce$BSC_log10 < bsc.boundary[2])
   #sce.tmp = sce[gene.chosen, which(sce$mnn_Batch > 2)]
   sce.tmp = sce[, sel.tmp]
   #sce.tmp = sce
@@ -283,7 +288,8 @@ if(Use.fastMNN){
   
 }
 
-save(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_bcMNN.Rdata')) 
+save(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_bcMNN.Rdata'))
+
 ########################################################
 ########################################################
 # Section : clustering and DE analysis or gene markers discovery
