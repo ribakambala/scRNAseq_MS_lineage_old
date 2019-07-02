@@ -329,8 +329,6 @@ if(Seurat.clustering)
   resolutions = c(0.4, 0.6, 0.8, seq(1.0, 4.0, by = 0.5))
   
   for(rr in resolutions){
-    rr = 4.0
-    
     pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering.Seurat_geneMarkers.scran_resolution", 
                      rr, ".pdf")
     pdf(pdfname, width=22, height = 18)
@@ -341,6 +339,8 @@ if(Seurat.clustering)
     ##########################################
     # test graph-based Louvain algorithm 
     ##########################################
+    rr = 1.2
+    
     pbmc = as.Seurat(sce)
     pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 20, dims = 1:20)
     
