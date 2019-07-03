@@ -1289,7 +1289,7 @@ batchCorrection_Scanorama = function()
 # 
 ########################################################
 ########################################################
-find.HVGs = function(sce, Norm.Vars.per.batch = TRUE, method = "scran")
+find.HVGs = function(sce, Norm.Vars.per.batch = TRUE, method = "scran", ntop = NULL)
 {
   if(method == "scran"){
     if(!Norm.Vars.per.batch){
@@ -1320,8 +1320,14 @@ find.HVGs = function(sce, Norm.Vars.per.batch = TRUE, method = "scran")
       dec.sorted <- dec[order(dec$bio, decreasing=TRUE),]
       head(dec.sorted)
       
-      # here HVGs selected with FDR<0.01
-      gene.chosen <- which(dec.sorted$FDR < 0.05)
+      if(is.null(ntop)){
+        # here HVGs selected with FDR<0.01
+        gene.chosen <- which(dec.sorted$FDR < 0.05) 
+      }else{
+        gene.choose 
+      }
+      
+      
       length(gene.chosen)
       
     }else{
