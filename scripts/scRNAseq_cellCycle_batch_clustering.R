@@ -119,7 +119,7 @@ bc.uniq = unique(batches)
 sce$batches <- batches
 
 Use.fastMNN = TRUE
-Norm.Vars.per.batch = FALSE # HVGs for each batch or not 
+Norm.Vars.per.batch = TRUE # HVGs for each batch or not 
 Rescale.Batches = TRUE # scaling data in each batch or not 
 k.mnn = 20
 cos.norm = TRUE
@@ -128,7 +128,9 @@ order2correct = c(4, 3, 1, 2)
 #order2correct = c(3, 4, 1, 2)
 
 source("scRNAseq_functions.R")
-gene.chosen = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 2000)
+HVGs = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 2000)
+gene.chosen = match(HVGs, rownames(sce))
+
 cat("nb of HGV : ", length(gene.chosen), "\n")
 
 ##########################################
@@ -154,8 +156,8 @@ if(Use.fastMNN){
     kk2check = 2
     par(mfrow=c(1,1))
     plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
-    
   }
+  
   original = list()
   fscs = c()
   #original0 = list()
@@ -197,7 +199,7 @@ if(Use.fastMNN){
   pdf(pdfname, width=14, height = 8)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
-  sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 15, ncomponents = 2)
+  sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 20, ncomponents = 2)
   p = plotUMAP(sce, ncomponents = 2, colour_by="mnn_Batch", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
   plot(p)
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))

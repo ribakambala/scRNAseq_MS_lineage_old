@@ -1317,18 +1317,15 @@ find.HVGs = function(sce, Norm.Vars.per.batch = TRUE, method = "scran", ntop = N
       #p2 <- plotColData(tmp.416B, x="Plate", y="log_size_factor_ERCC")
       #multiplot(p1, p2, cols=2)
       
-      dec.sorted <- dec[order(dec$bio, decreasing=TRUE),]
+      dec.sorted <- dec[order(dec$bio, decreasing=TRUE), ]
       head(dec.sorted)
       
       if(is.null(ntop)){
-        # here HVGs selected with FDR<0.01
-        gene.chosen <- which(dec.sorted$FDR < 0.05) 
+        # here HVGs selected with FDR < 0.01
+        gene.chosen <- rownames(dec.sorted)[which(dec.sorted$FDR < 0.05)] 
       }else{
-        gene.choose 
+        gene.chosen = rownames(dec.sorted)[1:ntop] 
       }
-      
-      
-      length(gene.chosen)
       
     }else{
       ## here we search batch-specific features
@@ -1358,13 +1355,18 @@ find.HVGs = function(sce, Norm.Vars.per.batch = TRUE, method = "scran", ntop = N
       dec.bc.sorted <- comb.out[order(comb.out$bio, decreasing=TRUE), ]
       head(dec.bc.sorted)
       
-      #length(which(dec.sorted$bio>0))
-      # here HVGs selected with FDR<0.01
-      #gene.chosen.bc <- which(dec.bc.sorted$p.value < 0.05)
-      #gene.chosen.bc <- which(dec.bc.sorted$FDR < 0.1)
-      gene.chosen.bc = which(dec.bc.sorted$bio>0)
-      #length(which(dec.sorted$bio>0))
-      length(gene.chosen.bc)
+      if(is.null(ntop)){
+        #length(which(dec.sorted$bio>0))
+        # here HVGs selected with FDR<0.01
+        #gene.chosen.bc <- which(dec.bc.sorted$p.value < 0.05)
+        #gene.chosen.bc <- which(dec.bc.sorted$FDR < 0.1)
+        gene.chosen.bc = rownames(dec.bc.sorted)[which(dec.bc.sorted$bio>0)]
+        #length(which(dec.sorted$bio>0)) 
+      }else{
+        gene.chosen.bc = rownames(dec.bc.sorted)[1:ntop]
+      }
+      
+      #length(gene.chosen.bc)
       
       ### compare the block and batch-specific HVGs selection
       #cat(length(gene.chosen), length(gene.chosen.bc), length(intersect(gene.chosen, gene.chosen.bc)), "\n")
@@ -1375,6 +1377,8 @@ find.HVGs = function(sce, Norm.Vars.per.batch = TRUE, method = "scran", ntop = N
       gene.chosen = gene.chosen.bc
       
     }
+    cat("nb of HGVs : ", length(gene.chosen), "\n")
+    
   }
   
   if(method == "Brenneck")
