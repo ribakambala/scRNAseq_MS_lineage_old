@@ -124,7 +124,7 @@ Rescale.Batches = TRUE # scaling data in each batch or not
 k.mnn = 20
 cos.norm = TRUE
 nb.pcs = 50
-order2correct = c(4, 3, 1, 2)
+order2correct = c(3, 4, 1, 2)
 #order2correct = c(3, 4, 1, 2)
 
 source("scRNAseq_functions.R")
@@ -204,16 +204,16 @@ if(Use.fastMNN){
   plot(p)
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
   p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
-    fontsize + ggtitle("Seurat clustering")
+    fontsize + ggtitle("MNN corrected")
   p2 = plotUMAP(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
-    fontsize + ggtitle("Seurat clustering")
+    fontsize + ggtitle("MNN corrected")
   multiplot(p1, p2, cols = 2)
   
   sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20, scale_features = TRUE)
   p1 = plotTSNE(sce, colour_by="pha-4", size_by = "FSC_log2") + 
-    fontsize + ggtitle("Seurat clustering")
+    fontsize + ggtitle("MNN corrected")
   p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
-    fontsize + ggtitle("Seurat clustering")
+    fontsize + ggtitle("MNN corrected")
   multiplot(p1, p2, cols = 2)
   
   # mnn.out$pairs
