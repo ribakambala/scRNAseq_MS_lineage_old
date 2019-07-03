@@ -13,8 +13,8 @@
 # http://bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/de.html#2_blocking_on_uninteresting_factors_of_variation)
 ########################################################
 ########################################################
-version.DATA = 'R6875_R7116_R7130_R7130redo_R7133_scRNA_v1'
-version.analysis =  paste0(version.DATA, '_20190506')
+version.DATA = 'scRNA_R6875_R7116_R7130_R7130redo_R7133_R7926'
+version.analysis =  paste0(version.DATA, '_20190703')
 
 dataDir = paste0("../data/")
 resDir = paste0("../results/", version.analysis)

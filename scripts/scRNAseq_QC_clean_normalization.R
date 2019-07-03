@@ -7,8 +7,8 @@
 ## Date of creation: Mon Feb 19 14:43:38 2018
 ##################################################
 ##################################################
-version.DATA = 'R6875_R7116_R7130_R7130redo_R7133_scRNA_v1'
-version.analysis =  paste0(version.DATA, '_20190506')
+version.DATA = 'scRNA_R6875_R7116_R7130_R7130redo_R7133_R7926'
+version.analysis =  paste0(version.DATA, '_20190703')
 
 dataDir = paste0("../data/")
 resDir = paste0("../results/", version.analysis)
@@ -17,6 +17,7 @@ RdataDir = paste0("../results/", version.analysis, "/Rdata/")
 if(!dir.exists(resDir)){dir.create(resDir)}
 if(!dir.exists(tabDir)){dir.create(tabDir)}
 if(!dir.exists(RdataDir)){dir.create(RdataDir)}
+
 
 Manually.Specify.sampleInfos.4scRNAseq = TRUE
 Aggregate.nf.QCs.plots.in.designMatrix = TRUE
@@ -83,6 +84,7 @@ if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
   design$request[which(design$flowcell.lane == "HLWTCBGX9_1")] = "R7130"
   design$request[which(design$flowcell.lane == "CCYTEANXX_4")] = "R7130"
   design$request[which(design$flowcell.lane == "CD2GTANXX_5")] = "R7133"
+  design$request[which(design$flowcell.lane == "H7KNYBGXB_1")] = "R7926"
   
 
   design$seqInfos = paste0(design$request, "_", design$flowcell.lane)
@@ -93,42 +95,6 @@ if(Manually.Specify.sampleInfos.filtering.4scRNAseq){
   design = design[kk, ]
   aa = aa[, c(1, kk+1)]
   
-}else{
-  #design = read.xlsx(design.file, sheet = 1, colNames = TRUE)
-  #design = data.frame(design$`Multiplex/Barcode`, design$Brief.Sample.Description, stringsAsFactors = FALSE)
-  #colnames(design) = c("barcodes", "sampleInfo")
-  #xx = design
-  # design = xx
-  # design$barcodes = gsub('[[:digit:]]+', '', design$barcodes)
-  # design$barcodes = gsub(':', '', design$barcodes, fixed = TRUE)
-  # design$barcodes = gsub("[ +]", "", design$barcodes)
-  # design$barcodes = gsub("\\s", "", design$barcodes)    
-  # design = design[-c(1:2), ]
-  # design$sampleInfo[grep("bulk", design$sampleInfo)] = "bulk.control"
-  # design$sampleInfo[grep("early", design$sampleInfo)] = "early"
-  # 
-  # if(Use.sampleID.mapSamples){
-  #   index = c()
-  #   for(n in 1:nrow(design))
-  #   {
-  #     jj = grep(design$sampleID[n], colnames(aa))
-  #     if(length(jj)==1){index = c(index, jj)
-  #     }else{cat("NOT FOUND sample for ", design$sampleID[n], "\n")}
-  #   }
-  #   
-  #   aa = data.frame(aa$gene, aa[, index], stringsAsFactors = FALSE)
-  #   colnames(aa)[-1] = apply(design[, c(2,1)], 1, paste0, collapse="_")
-  #   colnames(aa)[1] = 'gene';
-  # }else{
-  #   
-  #   xx = colnames(aa)[-1]
-  #   xx = data.frame(xx, rep("others", length(xx)), stringsAsFactors = FALSE)
-  #   colnames(xx) = c("barcodes", "sampleInfo")  
-  #   mm = match(xx$barcodes, design$barcodes)
-  #   xx$sampleInfo[which(!is.na(mm))] = design$sampleInfo[mm[which(!is.na(mm))]]
-  #   design = xx;
-  #   
-  # }
 }
 
 ##########################################
