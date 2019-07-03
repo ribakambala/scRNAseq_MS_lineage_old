@@ -238,7 +238,6 @@ if(Use.fastMNN){
               
   ) + geom_vline(xintercept = fsc.boundary, linetype="dashed", color = "blue", size=0.5) +
     geom_hline(yintercept= bsc.boundary, linetype="dashed", color = "red", size=0.5) 
-      
   
   sel.tmp = which(sce$FSC_log2 > fsc.boundary[1] & sce$FSC_log2 < fsc.boundary[2] 
                   & sce$BSC_log2 > bsc.boundary[1] & sce$BSC_log2 < bsc.boundary[2])
@@ -326,23 +325,31 @@ load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalize
 
 Seurat.clustering = TRUE
 Test.scran.clustering = FALSE
+
+sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 10, ncomponents = 2)
+p = plotUMAP(sce, ncomponents = 2, colour_by="mnn_Batch", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
+plot(p)
+
+fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
+  fontsize + ggtitle("MNN corrected")
+p2 = plotUMAP(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
+  fontsize + ggtitle("MNN corrected")
+multiplot(p1, p2, cols = 2)
+
+sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20, scale_features = TRUE)
+p1 = plotTSNE(sce, colour_by="pha-4", size_by = "FSC_log2") + 
+  fontsize + ggtitle("MNN corrected")
+p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
+  fontsize + ggtitle("MNN corrected")
+multiplot(p1, p2, cols = 2)
+
 ##########################################
 # (test clustering method) but Seurat method is used at the end 
 # https://master.bioconductor.org/packages/release/workflows/vignettes/simpleSingleCell/inst/doc/work-1-reads.html/
 # DE analysis is tested with scran but will be considered to be replaced by MAST or Seurat
 # DE analysis (or marker gene finding) following the cluster analysis
-
 ##########################################
-sce <- runUMAP(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20)
-p = plotUMAP(sce, colour_by="mnn_Batch", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
-plot(p)
-fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
-  fontsize + ggtitle("Seurat clustering")
-p2 = plotUMAP(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
-  fontsize + ggtitle("Seurat clustering")
-multiplot(p1, p2, cols = 2)
-
 if(Seurat.clustering)
 { 
   require(Seurat)
@@ -353,6 +360,10 @@ if(Seurat.clustering)
   resolutions = c(0.4, 0.6, 0.8, seq(1.0, 4.0, by = 0.5))
   
   for(rr in resolutions){
+    
+    rr = 0.6
+    cat("--- resolution is :", rr, "---\n")
+    
     pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering.Seurat_geneMarkers.scran_resolution", 
                      rr, ".pdf")
     pdf(pdfname, width=22, height = 18)
@@ -361,64 +372,30 @@ if(Seurat.clustering)
     ##########################################
     # test graph-based Louvain algorithm 
     ##########################################
-    rr = 1.2
-    
     pbmc = as.Seurat(sce)
-    pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
-    pbmc <- ScaleData(pbmc, features = rownames(pbmc))
-    
-    pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
-    
+    #pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+    #pbmc <- ScaleData(pbmc, features = rownames(pbmc))
+    # pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
     pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 20, dims = 1:20)
-    
-    cat("--- resolution is :", rr, "---\n")
     pbmc = FindClusters(pbmc, resolution = rr, algorithm = 3)
     
     # DimPlot(pbmc, reduction = "umap")
     
     # note that you can set `label = TRUE` or use the LabelClusters function to help label
     # individual clusters
-    pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10, reduction = "MNN", reduction.key = "umap", n.neighbors = 15, repulsion.strength = 2)
-    DimPlot(pbmc, reduction = "umap")
-    FeaturePlot(pbmc, features = c("pha-4", "hnd-1"), reduction = "umap")
+    #pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10, reduction = "MNN", reduction.key = "umap", n.neighbors = 15, repulsion.strength = 2)
+    #DimPlot(pbmc, reduction = "umap")
+    #FeaturePlot(pbmc, features = c("pha-4", "hnd-1"), reduction = "umap")
     # FeaturePlot(pbmc, features = c("pha-4", "hnd-1"), reduction = "UMAP")
-    
     sce$cluster_seurat <- factor(pbmc@active.ident)
     sce$cluster <- factor(pbmc@active.ident)
     sce = runPCA(sce)
     
-    # configuration of umap
-    # https://github.com/cran/umap/blob/master/R/umap.R
-    umap.defaults = list(
-      n_neighbors=20,
-      n_components=2,
-      metric="euclidean",
-      n_epochs=200,
-      input="data",
-      init="spectral",
-      min_dist=0.5,
-      set_op_mix_ratio=1,
-      local_connectivity=1,
-      bandwidth=1.0,
-      alpha=1,
-      gamma=1.0,
-      negative_sample_rate=5,
-      a=NA,
-      b=NA,
-      spread=1,
-      random_state=NA,
-      transform_state=NA,
-      knn_repeats=1,
-      verbose=TRUE,
-      umap_learn_args = NA
-    )
-    class(umap.defaults) = "umap.config"
-    
-    sce <- runUMAP(sce, use_dimred="MNN", perplexity = 20, n_dimred = 50, scale_features = TRUE, 
-                   method = "umap-learn", config = umap.defaults)
+    set.seed(1001)
+    sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 20)
     fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-    #plotUMAP(sce, colour_by="cluster", size_by = "FSC_log2") + 
-    #  fontsize + ggtitle("Seurat clustering")
+    plotUMAP(sce, colour_by="cluster", size_by = "FSC_log2") + 
+      fontsize + ggtitle("Seurat clustering")
     p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
       fontsize + ggtitle("Seurat clustering")
     p2 = plotUMAP(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
@@ -432,7 +409,6 @@ if(Seurat.clustering)
     p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
       fontsize + ggtitle("Seurat clustering")
     multiplot(p1, p2, cols = 2)
-    
     
     my.clusters = as.numeric(as.character(sce$cluster_seurat))
     
@@ -458,7 +434,7 @@ if(Seurat.clustering)
     
     plotHeatmap(sce, features=top.markers,
                 columns=order(sce$cluster_seurat), 
-                colour_columns_by=c("cluster"),
+                colour_columns_by=c("cluster",  "FSC_log2", "batches"),
                 cluster_cols=FALSE, show_colnames = FALSE,
                 center=TRUE, symmetric=TRUE, zlim=c(-5, 5))
     

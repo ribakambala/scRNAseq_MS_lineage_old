@@ -1624,5 +1624,60 @@ if(TEST.Hamberg.workflow.clustering)
   
 }
 
+##########################################
+# # configuration of umap
+# https://github.com/cran/umap/blob/master/R/umap.R
+##########################################
+config.umap = function(n_neighbors=15,
+                       n_components=2,
+                       metric="euclidean",
+                       n_epochs=200,
+                       input="data",
+                       init="spectral",
+                       min_dist=0.5,
+                       set_op_mix_ratio=1,
+                       local_connectivity=1,
+                       bandwidth=1.0,
+                       alpha=1,
+                       gamma=1.0,
+                       negative_sample_rate=5,
+                       a=NA,
+                       b=NA,
+                       spread=1,
+                       random_state=NA,
+                       transform_state=NA,
+                       knn_repeats=1,
+                       verbose=TRUE,
+                       umap_learn_args = NA)
+{
+  umap.defaults = list(
+    n_neighbors = n_neighbors,
+    n_components = n_components,
+    metric = metric,
+    n_epochs = n_epochs,
+    input = input,
+    init = init,
+    min_dist = min_dist,
+    set_op_mix_ratio = set_op_mix_ratio,
+    local_connectivity = local_connectivity,
+    bandwidth = bandwidth,
+    alpha = alpha,
+    gamma = gamma,
+    negative_sample_rate = negative_sample_rate,
+    a = a,
+    b = b,
+    spread = spread,
+    random_state = random_state,
+    transform_state = transform_state,
+    knn_repeats = knn_repeats,
+    verbose = verbose,
+    umap_learn_args = umap_learn_args
+  )
+  
+  class(umap.defaults) = "umap.config"
+  
+  return(umap.defaults)
+  
+}
 
 
