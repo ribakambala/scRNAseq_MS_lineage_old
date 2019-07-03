@@ -334,22 +334,81 @@ if(Seurat.clustering)
     pdf(pdfname, width=22, height = 18)
     par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
     
-    fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
-    
     ##########################################
     # test graph-based Louvain algorithm 
     ##########################################
     rr = 1.2
     
     pbmc = as.Seurat(sce)
+    pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+    pbmc <- ScaleData(pbmc, features = rownames(pbmc))
+    
+    pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+    
     pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 20, dims = 1:20)
     
     cat("--- resolution is :", rr, "---\n")
     pbmc = FindClusters(pbmc, resolution = rr, algorithm = 3)
+    
+    # DimPlot(pbmc, reduction = "umap")
+    
+    # note that you can set `label = TRUE` or use the LabelClusters function to help label
+    # individual clusters
+    pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10, reduction = "MNN", reduction.key = "umap", n.neighbors = 15, repulsion.strength = 2)
+    DimPlot(pbmc, reduction = "umap")
+    FeaturePlot(pbmc, features = c("pha-4", "hnd-1"), reduction = "umap")
+    # FeaturePlot(pbmc, features = c("pha-4", "hnd-1"), reduction = "UMAP")
+    
     sce$cluster_seurat <- factor(pbmc@active.ident)
     sce$cluster <- factor(pbmc@active.ident)
-    plotUMAP(sce, colour_by="cluster", size_by = "FSC_log10") + 
+    sce = runPCA(sce)
+    
+    # configuration of umap
+    # https://github.com/cran/umap/blob/master/R/umap.R
+    umap.defaults = list(
+      n_neighbors=20,
+      n_components=2,
+      metric="euclidean",
+      n_epochs=200,
+      input="data",
+      init="spectral",
+      min_dist=0.5,
+      set_op_mix_ratio=1,
+      local_connectivity=1,
+      bandwidth=1.0,
+      alpha=1,
+      gamma=1.0,
+      negative_sample_rate=5,
+      a=NA,
+      b=NA,
+      spread=1,
+      random_state=NA,
+      transform_state=NA,
+      knn_repeats=1,
+      verbose=TRUE,
+      umap_learn_args = NA
+    )
+    class(umap.defaults) = "umap.config"
+    
+    sce <- runUMAP(sce, use_dimred="MNN", perplexity = 20, n_dimred = 50, scale_features = TRUE, 
+                   method = "umap-learn", config = umap.defaults)
+    fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+    #plotUMAP(sce, colour_by="cluster", size_by = "FSC_log10") + 
+    #  fontsize + ggtitle("Seurat clustering")
+    p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log10") + 
       fontsize + ggtitle("Seurat clustering")
+    p2 = plotUMAP(sce, colour_by="hnd-1", size_by = "FSC_log10") + 
+      fontsize + ggtitle("Seurat clustering")
+    multiplot(p1, p2, cols = 2)
+    
+    
+    sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 50, scale_features = FALSE)
+    p1 = plotTSNE(sce, colour_by="pha-4", size_by = "FSC_log10") + 
+      fontsize + ggtitle("Seurat clustering")
+    p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log10") + 
+      fontsize + ggtitle("Seurat clustering")
+    multiplot(p1, p2, cols = 2)
+    
     
     my.clusters = as.numeric(as.character(sce$cluster_seurat))
     
