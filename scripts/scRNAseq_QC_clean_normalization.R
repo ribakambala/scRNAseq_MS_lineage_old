@@ -106,7 +106,8 @@ if(Aggregate.nf.QCs.plots.in.designMatrix){
   source("scRNAseq_functions.R")
   dirs.all = c('../../../Ariane/R7116_R7130_scrnaseq/results_all/multiqc_data_1', 
                "../../../Ariane/R6875_scRNAseq/results_all_3rd/MultiQC/multiqc_data", 
-               "../../R7130_redo_R7133/results_v2/multiqc_data_1")
+               "../../R7130_redo_R7133/results_v2/multiqc_data_1", 
+               "../../R7926/results_v2/multiqc_data")
   QCs.nf = aggrate.nf.QCs(dirs.all)
   QCs.nf$Sample = gsub("#", "_", QCs.nf$Sample)
   
@@ -240,7 +241,7 @@ filter_by_total_counts <- (sce$total_counts > threshod.total.counts.per.cell)
 table(filter_by_total_counts)
 filter_by_expr_features <- (sce$total_features_by_counts > threshod.nb.detected.genes.per.cell)
 table(filter_by_expr_features)
-filter_by_MT = sce$pct_counts_Mt < 7.5
+filter_by_MT = sce$pct_counts_Mt < 5
 table(filter_by_MT)
 
 sce$use <- (

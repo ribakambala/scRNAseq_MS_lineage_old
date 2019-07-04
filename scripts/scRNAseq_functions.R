@@ -114,7 +114,7 @@ convertGeneNames.forCountTable = function(aa, discard.gene.with.zero.reads = TRU
   counts <- as.matrix(counts[,-1])
   
   if(discard.gene.with.zero.reads){
-    cat("-- discard genes with zero reads --")
+    cat("-- discard genes with zero reads -- \n")
     ss = apply(counts, 1, sum)
     keep.genes = which(ss>0)
     counts = counts[keep.genes, ]
