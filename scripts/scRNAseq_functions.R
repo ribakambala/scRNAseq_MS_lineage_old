@@ -1005,7 +1005,7 @@ cellCycle.correction = function(sce, method = "seurat")
 # 
 ########################################################
 ########################################################
-Integrate.FACS.Information = function(sce, processing.FACS.Info = FALSE)
+Integrate.FACS.Information = function(sce, processing.FACS.Info = TRUE)
 {
   
   find_flowcell_lane = function(x)
@@ -1100,11 +1100,8 @@ Integrate.FACS.Information = function(sce, processing.FACS.Info = FALSE)
     sce$index.well = Index.well
     sce$FSC = FSC
     sce$BSC = BSC
-    save(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
-     
-  }else{
-    
-    load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+    # save(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+  
   }
   
   return(sce)

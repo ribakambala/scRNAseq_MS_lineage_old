@@ -80,27 +80,27 @@ set.seed(1234567)
 options(stringsAsFactors = FALSE)
 
 #load(file = file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
-Add.FACS.informations = FALSE
+facsInfo.Added = FALSE
 
 ##########################################
 # Here we start to add the facs information in the metadata
 # 
 ##########################################
-if(Add.FACS.informations){
+if(facsInfo.Added){
+  load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+}else{
   load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
   
   source("scRNAseq_functions.R")
   sce = Integrate.FACS.Information(sce)
   
   save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
-  # load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
-}else{
-  load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
-  
 }
 
 # logcounts(sce) =  assay(sce, "logcounts_seurat_SG2MCorrected")
+table(sce$nb.cells)
 sce = sce[, which(sce$nb.cells == 1)]
+
 sce$FSC_log2 = 3/2*log2(sce$FSC)
 sce$BSC_log2 = 3/2*log2(sce$BSC)
 
@@ -128,8 +128,9 @@ Rescale.Batches = TRUE # scaling data in each batch or not
 k.mnn = 20
 cos.norm = TRUE
 nb.pcs = 50
-order2correct = c(3, 4, 1, 2)
+order2correct = c(4, 5, 3, 1, 2)
 #order2correct = c(3, 4, 1, 2)
+cat("merging order for batch correction :\n", paste0(bc.uniq[order2correct], collapse = "\n"), "\n")
 
 source("scRNAseq_functions.R")
 HVGs = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 2000)
@@ -203,9 +204,12 @@ if(Use.fastMNN){
   pdf(pdfname, width=14, height = 8)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
-  sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 20, ncomponents = 2)
+  set.seed(1001)
+  nb.MNN.to.use = 15
+  sce <- runUMAP(sce, use_dimred="MNN", n_dimred = nb.MNN.to.use, ncomponents = 2)
   p = plotUMAP(sce, ncomponents = 2, colour_by="mnn_Batch", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
   plot(p)
+  
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
   p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
     fontsize + ggtitle("MNN corrected")
@@ -213,7 +217,7 @@ if(Use.fastMNN){
     fontsize + ggtitle("MNN corrected")
   multiplot(p1, p2, cols = 2)
   
-  sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20, scale_features = TRUE)
+  sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = nb.MNN.to.use)
   p1 = plotTSNE(sce, colour_by="pha-4", size_by = "FSC_log2") + 
     fontsize + ggtitle("MNN corrected")
   p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
@@ -232,8 +236,8 @@ if(Use.fastMNN){
                                       compute.variances=TRUE)))
   with.var$lost.var
   
-  fsc.boundary = c(27.2, 28.5)
-  bsc.boundary = c(24.5, 27)
+  fsc.boundary = c(27.2, 28.6)
+  bsc.boundary = c(24.5, 26.8)
   plotColData(sce,
               x = "FSC_log2",
               y = "BSC_log2",
@@ -270,11 +274,19 @@ if(Use.fastMNN){
   #multiplot(ot, ct, cols=2)
   
   set.seed(100)
-  osce <- runUMAP(sce.tmp, use_dimred="PCA", perplexity = 20)
+  osce <- runUMAP(sce.tmp, use_dimred="PCA", n_dimred = nb.MNN.to.use)
   ot <- plotUMAP(osce, colour_by="mnn_Batch", size_by = "FSC_log2") + ggtitle("Original")
   set.seed(100)
-  csce <- runUMAP(sce.tmp, use_dimred="MNN", perplexity = 20)
+  csce <- runUMAP(sce.tmp, use_dimred="MNN", n_dimred = nb.MNN.to.use)
   ct <- plotUMAP(csce, colour_by="mnn_Batch", size_by = "FSC_log2") + ggtitle("Corrected")
+  multiplot(ot, ct, cols=2)
+  
+  set.seed(100)
+  osce <- runTSNE(sce.tmp, use_dimred="PCA", perplexity = 20, n_dimred = nb.MNN.to.use)
+  ot <- plotTSNE(osce, colour_by="mnn_Batch", size_by = "FSC_log2") + ggtitle("Original")
+  set.seed(100)
+  csce <- runTSNE(sce.tmp, use_dimred="MNN", perplexity = 20, n_dimred = nb.MNN.to.use)
+  ct <- plotTSNE(csce, colour_by="mnn_Batch", size_by = "FSC_log2") + ggtitle("Corrected")
   multiplot(ot, ct, cols=2)
   
   kbet.orig <- kBET(
@@ -324,24 +336,30 @@ library(matrixStats)
 #library(M3Drop)
 library(RColorBrewer)
 library(SingleCellExperiment)
-#set.seed(100)
+
 load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_bcMNN.Rdata')) 
 
 Seurat.clustering = TRUE
 Test.scran.clustering = FALSE
-
-sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 10, ncomponents = 2)
-p = plotUMAP(sce, ncomponents = 2, colour_by="mnn_Batch", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
-plot(p)
-
 fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+
+## double check the umap and tsnet visulization and 
+set.seed(100)
+sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 15)
+p1 = plotUMAP(sce, ncomponents = 2, colour_by="batches", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected-umap") 
+plot(p1)
+
+sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 15)
+p2 = plotTSNE(sce, ncomponents = 2, colour_by="batches", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected-tSNE") 
+plot(p2)
+
 p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
   fontsize + ggtitle("MNN corrected")
 p2 = plotUMAP(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
   fontsize + ggtitle("MNN corrected")
 multiplot(p1, p2, cols = 2)
 
-sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 20, scale_features = TRUE)
+
 p1 = plotTSNE(sce, colour_by="pha-4", size_by = "FSC_log2") + 
   fontsize + ggtitle("MNN corrected")
 p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
@@ -365,10 +383,10 @@ if(Seurat.clustering)
   
   for(rr in resolutions){
     
-    rr = 0.6
+    rr = 3.0
     cat("--- resolution is :", rr, "---\n")
     
-    pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering.Seurat_geneMarkers.scran_resolution", 
+    pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering.Seurat_geneMarkers.scran_resolution_", 
                      rr, ".pdf")
     pdf(pdfname, width=22, height = 18)
     par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
@@ -383,8 +401,6 @@ if(Seurat.clustering)
     pbmc = FindNeighbors(object = pbmc, reduction = "MNN", k.param = 20, dims = 1:20)
     pbmc = FindClusters(pbmc, resolution = rr, algorithm = 3)
     
-    # DimPlot(pbmc, reduction = "umap")
-    
     # note that you can set `label = TRUE` or use the LabelClusters function to help label
     # individual clusters
     #pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10, reduction = "MNN", reduction.key = "umap", n.neighbors = 15, repulsion.strength = 2)
@@ -393,21 +409,19 @@ if(Seurat.clustering)
     # FeaturePlot(pbmc, features = c("pha-4", "hnd-1"), reduction = "UMAP")
     sce$cluster_seurat <- factor(pbmc@active.ident)
     sce$cluster <- factor(pbmc@active.ident)
-    sce = runPCA(sce)
-    
-    set.seed(1001)
-    sce <- runUMAP(sce, use_dimred="MNN", n_dimred = 20)
-    fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
+        
     plotUMAP(sce, colour_by="cluster", size_by = "FSC_log2") + 
       fontsize + ggtitle("Seurat clustering")
+    
+    plotTSNE(sce, colour_by="cluster", size_by = "FSC_log2") + 
+      fontsize + ggtitle("Seurat clustering")
+    
     p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
       fontsize + ggtitle("Seurat clustering")
     p2 = plotUMAP(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
       fontsize + ggtitle("Seurat clustering")
     multiplot(p1, p2, cols = 2)
     
-    
-    sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = 50, scale_features = FALSE)
     p1 = plotTSNE(sce, colour_by="pha-4", size_by = "FSC_log2") + 
       fontsize + ggtitle("Seurat clustering")
     p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log2") + 
@@ -415,7 +429,6 @@ if(Seurat.clustering)
     multiplot(p1, p2, cols = 2)
     
     my.clusters = as.numeric(as.character(sce$cluster_seurat))
-    
     cat(table(my.clusters), "\n")
     
     ## run the find markers and then collect markers for each clusters (scran) 
