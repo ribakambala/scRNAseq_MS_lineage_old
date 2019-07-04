@@ -24,23 +24,22 @@ if(!dir.exists(resDir)){dir.create(resDir)}
 if(!dir.exists(tabDir)){dir.create(tabDir)}
 if(!dir.exists(RdataDir)){dir.create(RdataDir)}
 
-correct.cellCycle = TRUE
-
 ##########################################
 # Remove the cell cycle confounder 
 # here we choose to use Seurat to regress out the cell cycle effect
 # we need to train the cells to identify the cell cycle phase
 # this could be more complicated than expected
 ##########################################
+correct.cellCycle = FALSE
+
+load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+
 if(correct.cellCycle){
   source("scRNAseq_functions.R")
-  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
-  
   # cellCycle.correction(sce, method = "seurat")
   #load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.Rdata'))
   #sce_old = sce
   load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
-  #saveRDS(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected.rds'))
   
   library(scater)
   p1 = scater::plotPCA(
@@ -60,7 +59,8 @@ if(correct.cellCycle){
   ) + ggtitle(paste0("PCA -- "))
   
   multiplot(p1, p2, cols = 2)
-  
+}else{
+  save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata'))
 }
 
 ##########################################
@@ -80,19 +80,23 @@ set.seed(1234567)
 options(stringsAsFactors = FALSE)
 
 #load(file = file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
-Use.FACS.informations = TRUE
+Add.FACS.informations = FALSE
 
 ##########################################
 # Here we start to add the facs information in the metadata
 # 
 ##########################################
-if(Use.FACS.informations){
-  #source("scRNAseq_functions.R")
-  #sce = Integrate.FACS.Information(sce)
-  #save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
-  load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
-}else{
+if(Add.FACS.informations){
   load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
+  
+  source("scRNAseq_functions.R")
+  sce = Integrate.FACS.Information(sce)
+  
+  save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
+  # load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+}else{
+  load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+  
 }
 
 # logcounts(sce) =  assay(sce, "logcounts_seurat_SG2MCorrected")

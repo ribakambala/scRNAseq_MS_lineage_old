@@ -288,7 +288,7 @@ save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_filtered_SCE.Rdata'))
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_filtered_SCE.Rdata'))
 
 pdfname = paste0(resDir, "/scRNAseq_QCs_genes_filterting_", version.analysis, ".pdf")
-pdf(pdfname, width=10, height = 6)
+pdf(pdfname, width=16, height = 10)
 par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
 
 #plotQC(reads, type = "highest-expression", n=20)
@@ -343,7 +343,7 @@ library(scater)
 library(scran)
 options(stringsAsFactors = FALSE)
 
-Normalization.Testing = TRUE
+Normalization.Testing = FALSE
 
 reducedDim(sce) <- NULL
 endog_genes <- !rowData(sce)$is_feature_control
@@ -368,6 +368,13 @@ clusters <- quickCluster(sce, min.size = 100, method="igraph")
 table(clusters)
 
 sce <- computeSumFactors(sce, clusters = clusters)
+
+## quick check for size factors calculated by scran
+summary(sizeFactors(sce))
+plot(sce$total_counts/1e6, sizeFactors(sce), log="xy",
+     xlab="Library size (millions)", ylab="Size factor", pch=16)
+
+
 sce <- normalize(sce, exprs_values = "counts", return_log = TRUE)
 
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
