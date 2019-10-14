@@ -383,7 +383,7 @@ if(Seurat.clustering)
   
   for(rr in resolutions){
     
-    rr = 3.0
+    rr = 1.2
     cat("--- resolution is :", rr, "---\n")
     
     pdfname = paste0(resDir, "/scRNAseq_QCed_filtered_normalized_batchCorrected_clustering.Seurat_geneMarkers.scran_resolution_", 
@@ -467,7 +467,6 @@ if(Seurat.clustering)
   }
   
 }
-
 
 ##########################################
 # here select subset of whole dataset to redo clustering
