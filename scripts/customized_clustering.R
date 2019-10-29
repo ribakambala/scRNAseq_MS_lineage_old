@@ -34,7 +34,13 @@ cal_autocor_stationaryTest_sd = function(var, plot = FALSE)
   
 }
 
-find.timer.genes = function()
+
+Test.timer.genes.with.HashimshonyLineageData = function(timers)
+{
+  
+}
+
+find.timer.genes = function(Test.timer.genes.with.HashimshonyData = FALSE)
 {
    dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
    require('openxlsx')
@@ -90,10 +96,25 @@ find.timer.genes = function()
    library(tseries)
    
    yy = t(apply(bulk, 1, cal_autocor_stationaryTest_sd))
+   
    plot(yy[, c(1, 3)], cex = 0.5);
    abline(v = 0.6, col='red')
    abline(h = 1.5, col = 'red')
    
+   yy = data.frame(yy)
+   sels = which(yy$ac.max>0.6 & yy$sd > 1.5)
    
+   timers = bulk[sels, ]
    
+   plot(timers[100,], type='b')
+   
+   if(Test.timer.genes.with.HashimshonyData){
+     Test.timer.genes.with.HashimshonyLineageData(timers)
+   }
+   
+   return(timers)
 }
+
+
+
+
