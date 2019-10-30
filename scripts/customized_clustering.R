@@ -22,7 +22,7 @@ cal_cor_sd_time = function(var, nb.timepoints = 9){
 cal_autocor_stationaryTest_sd = function(var, plot = FALSE)
 {
   # var = bulk[19, ]; plot = TRUE
-  ac = acf(var, lag.max = 7, plot = plot)
+  ac = acf(var, lag.max = 10, plot = plot)
   if(plot){ plot(var) }
   ac = abs(ac$acf[-1])
   #acf(as.numeric(bulk[1, ]), lag.max = 10, plot = TRUE)
@@ -34,19 +34,87 @@ cal_autocor_stationaryTest_sd = function(var, plot = FALSE)
   
 }
 
-
 Test.timer.genes.with.HashimshonyLineageData = function(timers)
 {
+  require('openxlsx')
+  lineages = read.xlsx(paste0(dataDir.Hashimsholy, "/Hashimshony_datasets_lineage_11timepoints.xlsx"), sheet = 1, startRow = 9, colNames = FALSE)
+  
+  names = lineages[c(1, 2), ]
+  xx = lineages[-c(1, 2), ]
+  
+  lineages.names = c('AB_T', 'MS_T', 'E_T', "C_T", 'P3_T')
+  timepoints = c(1:11)
+  colnames(xx) = c('ensEMBL.IDs', 'Wormbase',  as.vector(t(outer(lineages.names, timepoints, paste, sep="")))) 
+  
+  ## keep genes considered as timers
+  xx = xx[match(rownames(timers), xx[,2]), ]
+  rownames(xx) = xx[, 2]
+  
+  
+  ## import another table from GEO
+  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
+  aa = aa[match(xx$ensEMBL.IDs, rownames(aa)), ]
+  rownames(aa) = rownames(xx)
+  test = mapply(aa, FUN=as.numeric)
+  rownames(test) = rownames(aa)
+  test = log2(test + 2^-6)
+  
+  xx = xx[, -c(1, 2)]
+  test = mapply(xx, FUN=as.numeric)
+  rownames(test) = rownames(xx)
+  test = log2(test + 2^-6)
+  
+  estimate.timing(test[, 1], timers)  
   
 }
+
+
+estimate.timing = function(vec, timers)
+{
+  
+  for(kk in c(1:55)){
+    # kk = 55
+    vec = test[, kk]
+    corrs = rep(NA, length = ncol(timers))
+    names(corrs) = colnames(timers)
+    timepoints = gsub('mpfc_','',  colnames(timers))
+    timepoints[c(1:8)] = c('0', '5', '10', '20', '40', '50', '60', '70')
+    timepoints = as.numeric(timepoints)
+    
+    for(n in 1:ncol(timers)) {
+      #ii = which(vec > (-6) & timers[,n] > (-6))
+      ii = which(timers[,n] > (-6))
+      # ii = c(1:nrow(timers))
+      corrs[n] = cor(vec[ii], timers[ii,n], method = 'pearson')
+    }
+    predFun = loess(corrs ~ timepoints, span = 0.15)
+    
+    prediction = predict(predFun, timepoints, se = FALSE)
+    index = which(prediction==max(prediction))
+    estimate.timing = timepoints[index]
+    
+    plot(timepoints, corrs)
+    points(timepoints, prediction, type = 'l', lwd=1.5, col='darkblue')
+    points(timepoints[index], prediction[index], col = 'darkred', cex = 2.0, pch = 16)
+    
+    cat(colnames(test)[kk], " vs. ", estimate.timing, "min -- corr : ", prediction[index], "\n")
+    
+  }
+  
+  return(estimate.timing)
+  
+}
+
+
 
 find.timer.genes = function(Test.timer.genes.with.HashimshonyData = FALSE)
 {
    dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
-   require('openxlsx')
+  
    
    double.check.lineage.independent.genes = FALSE
    if(double.check.lineage.independent.genes){
+     require('openxlsx')
      lineages = read.xlsx(paste0(dataDir.Hashimsholy, "/Hashimshony_datasets_lineage_11timepoints.xlsx"), sheet = 1, startRow = 9, colNames = FALSE)
      
      names = lineages[c(1, 2), ]
@@ -102,7 +170,7 @@ find.timer.genes = function(Test.timer.genes.with.HashimshonyData = FALSE)
    abline(h = 1.5, col = 'red')
    
    yy = data.frame(yy)
-   sels = which(yy$ac.max>0.6 & yy$sd > 1.5)
+   sels = which(yy$ac.max>0.6 & yy$sd > 2)
    
    timers = bulk[sels, ]
    
