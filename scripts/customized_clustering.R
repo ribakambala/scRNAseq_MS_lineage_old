@@ -7,10 +7,10 @@
 # Date of creation: Wed Oct 16 11:38:07 2019
 ##########################################################################
 ##########################################################################
-cal_cor_sd_time = function(var, nb.timepoints = 9){
-  # var = xx[4, ]
-  nb.vec = length(var) / nb.timepoints
-  dv = t(matrix(var, nrow = nb.vec, byrow = TRUE))
+cal_cor_sd_time = function(vec, nb.timepoints = 9){
+  # vec = xx[4, ]
+  nb.vec = length(vec) / nb.timepoints
+  dv = t(matrix(vec, nrow = nb.vec, byrow = TRUE))
   dv.cor = cor(dv)
   dv.sd = apply(dv, 2, sd)
   
@@ -19,18 +19,22 @@ cal_cor_sd_time = function(var, nb.timepoints = 9){
     
 }
 
-cal_autocor_stationaryTest_sd = function(var, plot = FALSE)
+cal_autocor_stationaryTest_sd = function(vec, plot = FALSE, lag.length = 15)
 {
-  # var = bulk[19, ]; plot = TRUE
-  ac = acf(var, lag.max = 10, plot = plot)
-  if(plot){ plot(var) }
+  library(tseries)
+  options(warn=-1)
+  # vec = bulk[2369, ]; plot = TRUE
+  ac = acf(vec, lag.max = lag.length, plot = plot)
   ac = abs(ac$acf[-1])
   #acf(as.numeric(bulk[1, ]), lag.max = 10, plot = TRUE)
-  ac.test = adf.test(var) # p-value < 0.05 indicates the TS is stationary
-  # kpss.test(tsData)var
-  sds = sd(var,  na.rm = TRUE)
+  adf.test = adf.test(vec) # p-value < 0.05 indicates the TS is stationary
+  box.test = Box.test(vec, lag=lag.length, type="Ljung-Box")
+  # kpss.test(tsData)vec
+  sds = sd(vec,  na.rm = TRUE)
   
-  return(c(ac.max =  max(ac), pval.ac = ac.test$p.value, sd = sds))
+  if(plot){ plot(vec, main = paste0('sd = ', sds)) }
+  
+  return(c(ac.max =  max(ac), sd = sds, pval.box = box.test$p.value, pval.adf = adf.test$p.value))
   
 }
 
@@ -76,52 +80,66 @@ Test.timingEstimate.with.HashimshonyLineages = function()
   
 }
 
-find.timer.genes = function(Test.timer.genes.with.HashimshonyData = FALSE)
+find.timer.genes = function(plot.test = FALSE)
 {
   dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
-  load( file = paste0(dataDir.Hashimsholy, "/geneNames_mapping_Wormbase.Rdata"))
+  load(file = paste0(dataDir.Hashimsholy, "/annotMapping_ensID_Wormbase_GeneName.Rdata"))
+  # annot = read.csv(file = "../../../../annotations/BioMart_WBcel235_noFilters.csv", header = TRUE)
+  #geneMapping$Gene.name = annot$Gene.name[match(geneMapping$Wormbase, annot$Gene.stable.ID)]
+  #save(geneMapping, file = paste0(dataDir.Hashimsholy, "/annotMapping_ensID_Wormbase_GeneName.Rdata"))
   
   bulk = read.delim(file = paste0(dataDir.Hashimsholy, "/GSE50548_Whole_embryo_interval_timecourse.txt"), 
                     row.names = 1,  header = TRUE, sep = "\t")
   
-  mm = match(rownames(bulk), geneMapping$ensEMBL.IDs)
-  rownames(bulk) = geneMapping$Wormbase[mm]
-  
   bulk = as.matrix(bulk)
   ss = apply(bulk, 1, sum)
-  kk = which(ss>2^5)
+  
+  ## filter the genes by
+  kk = which(ss>0)
+  bulk = bulk[kk, ]
+  ss = ss[kk]
+  
+  kk = which(ss>10^2)
   bulk = bulk[kk, ]
   
   bulk = log2(bulk + 2^-6)
   
-  library(tseries)
+  ## the main result: max of autocorrection, sd, pval for Ljung-Box test for independence test (pval < 0.05 non-stationary time series), 
+  ## Augmented Dickey–Fuller (ADF) t-statistic test for unit root test(pval large for non-stationary time sereis) 
+  ## one reference web: https://rpubs.com/richkt/269797
+  timers = t(apply(bulk, 1, cal_autocor_stationaryTest_sd))
+  timers = data.frame(timers)
   
-  yy = t(apply(bulk, 1, cal_autocor_stationaryTest_sd))
-  
-  plot(yy[, c(1, 3)], cex = 0.5);
-  abline(v = 0.6, col='red')
-  abline(h = 1.5, col = 'red')
-  
-  yy = data.frame(yy)
-  sels = which(yy$ac.max>0.6 & yy$sd > 2)
-  
-  timers = bulk[sels, ]
-  
-  plot(timers[100,], type='b')
-  
-  if(Test.timer.genes.with.HashimshonyData){
-    Test.timer.genes.with.HashimshonyLineageData(timers)
+  if(plot.test){
+    
+    par(mfrow = c(1,2))
+    plot(-log10(timers$pval.box), timers$ac.max, cex = 0.2)
+    abline(h= 0.5, col='red', lwd= 2.0)
+    abline(v = 3, col ='red', lwd = 2.0)
+    plot(-log10(timers$pval.box), timers$sd, cex = 0.2)
+    abline(v = 3, col ='red', lwd = 2.0)
+    abline(h= 1, col='red', lwd= 2.0)
+    
+    #plot(timers[100,], type='b')
   }
   
+  mm = match(rownames(timers), geneMapping$ensEMBL.IDs)
+  geneNames = geneMapping$Gene.name[mm]
+  jj = !is.na(geneNames)
+  timers = timers[jj, ]
+  rownames(timers) = geneNames[jj]
+  
+  # save(timers, file =paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval.Rdata"))
+  
   return(timers)
+  
 }
 
 
-estimate.timing.with.timer.genes = function(vec, timerGenes.ac =  0.6, timerGenes.sd = 2, loess.span = 1.5)
+estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 1.5, loess.span = 1.5, reprocess.timer.genes = FALSE)
 {
   # input: 
   # vec -- a vector of gene expression with names of WBGeneID 
-  # 
   
   vec = test[, kk]
   corrs = rep(NA, length = ncol(timers))
