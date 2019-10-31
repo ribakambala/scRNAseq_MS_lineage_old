@@ -562,3 +562,49 @@ if(Select.Early.timePoints){
   dev.off()
   
 }
+
+########################################################
+########################################################
+# Section : Clustering section by integrating various informations: 
+# gene expression, fac info, estimated timing and velocity 
+########################################################
+########################################################
+Test.timingEstimate.with.HashimshonyLineages = function()
+{
+  require('openxlsx')
+  lineages = read.xlsx(paste0(dataDir.Hashimsholy, "/Hashimshony_datasets_lineage_11timepoints.xlsx"), sheet = 1, startRow = 9, colNames = FALSE)
+  
+  names = lineages[c(1, 2), ]
+  xx = lineages[-c(1, 2), ]
+  
+  lineages.names = c('AB_T', 'MS_T', 'E_T', "C_T", 'P3_T')
+  timepoints = c(1:11)
+  colnames(xx) = c('ensEMBL.IDs', 'Wormbase',  as.vector(t(outer(lineages.names, timepoints, paste, sep="")))) 
+  
+  ## keep genes considered as timers
+  xx = xx[match(rownames(timers), xx[,2]), ]
+  rownames(xx) = xx[, 2]
+  
+  
+  ## import another table from GEO
+  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
+  aa = aa[match(xx$ensEMBL.IDs, rownames(aa)), ]
+  rownames(aa) = rownames(xx)
+  test = mapply(aa, FUN=as.numeric)
+  rownames(test) = rownames(aa)
+  test = log2(test + 2^-6)
+  
+  xx = xx[, -c(1, 2)]
+  test = mapply(xx, FUN=as.numeric)
+  rownames(test) = rownames(xx)
+  test = log2(test + 2^-6)
+  
+  estimate.timing(test[, 1], timers)
+  
+  
+  for(kk in c(1:55)){
+    # kk = 55
+    cat(colnames(test)[kk], " vs. ", estimate.timing, "min -- corr : ", prediction[index], "\n")
+  }
+  
+}

@@ -38,47 +38,6 @@ cal_autocor_stationaryTest_sd = function(vec, plot = FALSE, lag.length = 15)
   
 }
 
-Test.timingEstimate.with.HashimshonyLineages = function()
-{
-  require('openxlsx')
-  lineages = read.xlsx(paste0(dataDir.Hashimsholy, "/Hashimshony_datasets_lineage_11timepoints.xlsx"), sheet = 1, startRow = 9, colNames = FALSE)
-  
-  names = lineages[c(1, 2), ]
-  xx = lineages[-c(1, 2), ]
-  
-  lineages.names = c('AB_T', 'MS_T', 'E_T', "C_T", 'P3_T')
-  timepoints = c(1:11)
-  colnames(xx) = c('ensEMBL.IDs', 'Wormbase',  as.vector(t(outer(lineages.names, timepoints, paste, sep="")))) 
-  
-  ## keep genes considered as timers
-  xx = xx[match(rownames(timers), xx[,2]), ]
-  rownames(xx) = xx[, 2]
-  
-  
-  ## import another table from GEO
-  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
-  aa = aa[match(xx$ensEMBL.IDs, rownames(aa)), ]
-  rownames(aa) = rownames(xx)
-  test = mapply(aa, FUN=as.numeric)
-  rownames(test) = rownames(aa)
-  test = log2(test + 2^-6)
-  
-  xx = xx[, -c(1, 2)]
-  test = mapply(xx, FUN=as.numeric)
-  rownames(test) = rownames(xx)
-  test = log2(test + 2^-6)
-  
-  estimate.timing(test[, 1], timers)
-  
-  
-  for(kk in c(1:55)){
-    # kk = 55
-    
-  }
-  
-  
-  
-}
 
 find.timer.genes = function(plot.test = FALSE)
 {
@@ -123,6 +82,8 @@ find.timer.genes = function(plot.test = FALSE)
     #plot(timers[100,], type='b')
   }
   
+  timers = data.frame(timers, bulk)
+  
   mm = match(rownames(timers), geneMapping$ensEMBL.IDs)
   geneNames = geneMapping$Gene.name[mm]
   jj = !is.na(geneNames)
@@ -130,18 +91,26 @@ find.timer.genes = function(plot.test = FALSE)
   rownames(timers) = geneNames[jj]
   
   # save(timers, file =paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval.Rdata"))
-  
   return(timers)
-  
 }
 
 
-estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 1.5, loess.span = 1.5, reprocess.timer.genes = FALSE)
+estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 0, loess.span = 1.5,
+                                            use = 'lowFilter.timers',
+                                            reprocess.timer.genes = FALSE, PLOT.test = FALSE)
 {
   # input: 
   # vec -- a vector of gene expression with names of WBGeneID 
+  if(reprocess.timer.genes){
+    find.timer.genes(plot.test = FALSE)
+  }else{
+    load(file =paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval.Rdata"))
+  }
   
-  vec = test[, kk]
+  sels.timerGenes = which(timers$ac.max > timerGenes.ac & timers$pval.box < timerGenes.pval)
+  timers = timers[sels.timerGenes, -c(1:4)]
+  
+  #vec = test[, kk]
   corrs = rep(NA, length = ncol(timers))
   names(corrs) = colnames(timers)
   timepoints = gsub('mpfc_','',  colnames(timers))
@@ -149,31 +118,24 @@ estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGen
   timepoints = as.numeric(timepoints)
   
   for(n in 1:ncol(timers)) {
-    #ii = which(vec > (-6) & timers[,n] > (-6))
-    ii = which(timers[,n] > (-6))
-    # ii = c(1:nrow(timers))
+    if(use == 'lowFilter.timers') ii = which(timers[,n] > (-6))
+    if(use ==  'lowFilter.target') ii = which(vec > (-6)) 
+    if(use ==  'lowFilter.both') ii = which(vec > (-6) & timers[,n] > (-6))
+    if(use ==  'all') ii = c(1:nrow(timers))
     corrs[n] = cor(vec[ii], timers[ii,n], method = 'pearson')
   }
-  predFun = loess(corrs ~ timepoints, span = 0.15)
+  predFun = loess(corrs ~ timepoints, span = loess.span)
   
   prediction = predict(predFun, timepoints, se = FALSE)
   index = which(prediction==max(prediction))
   estimate.timing = timepoints[index]
   
-  plot(timepoints, corrs)
-  points(timepoints, prediction, type = 'l', lwd=1.5, col='darkblue')
-  points(timepoints[index], prediction[index], col = 'darkred', cex = 2.0, pch = 16)
-  
-  cat(colnames(test)[kk], " vs. ", estimate.timing, "min -- corr : ", prediction[index], "\n")
+  if(PLOT.test){
+    plot(timepoints, corrs)
+    points(timepoints, prediction, type = 'l', lwd=1.5, col='darkblue')
+    points(timepoints[index], prediction[index], col = 'darkred', cex = 2.0, pch = 16)
+  }
   
   return(estimate.timing)
   
 }
-
-
-
-
-
-
-
-
