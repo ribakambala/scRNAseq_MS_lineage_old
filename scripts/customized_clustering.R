@@ -95,20 +95,28 @@ find.timer.genes = function(plot.test = FALSE)
 }
 
 
-estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 0, loess.span = 1.5,
+estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 0, loess.span = 0.15,
                                             use = 'lowFilter.timers',
                                             reprocess.timer.genes = FALSE, PLOT.test = FALSE)
 {
   # input: 
   # vec -- a vector of gene expression with names of WBGeneID 
+  
+  # vec = test[, kk]; reprocess.timer.genes = FALSE;  use = 'lowFilter.timers'; loess.span = 0.15;
   if(reprocess.timer.genes){
     find.timer.genes(plot.test = FALSE)
   }else{
     load(file =paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval.Rdata"))
   }
   
+  ## select the timer genes using pval and autocorrelation
   sels.timerGenes = which(timers$ac.max > timerGenes.ac & timers$pval.box < timerGenes.pval)
   timers = timers[sels.timerGenes, -c(1:4)]
+  
+  # select the common genes shared by timers and vec
+  sharedGenes = intersect(rownames(timers), names(vec))
+  vec = vec[match(sharedGenes, names(vec))]
+  timers = timers[match(sharedGenes, rownames(timers)),]
   
   #vec = test[, kk]
   corrs = rep(NA, length = ncol(timers))
@@ -131,6 +139,7 @@ estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGen
   estimate.timing = timepoints[index]
   
   if(PLOT.test){
+    par(mfrow = c(1,1))
     plot(timepoints, corrs)
     points(timepoints, prediction, type = 'l', lwd=1.5, col='darkblue')
     points(timepoints[index], prediction[index], col = 'darkred', cex = 2.0, pch = 16)

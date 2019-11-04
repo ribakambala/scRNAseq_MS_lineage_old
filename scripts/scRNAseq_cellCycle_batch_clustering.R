@@ -571,6 +571,7 @@ if(Select.Early.timePoints){
 ########################################################
 Test.timingEstimate.with.HashimshonyLineages = function()
 {
+  dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
   require('openxlsx')
   lineages = read.xlsx(paste0(dataDir.Hashimsholy, "/Hashimshony_datasets_lineage_11timepoints.xlsx"), sheet = 1, startRow = 9, colNames = FALSE)
   
@@ -585,26 +586,31 @@ Test.timingEstimate.with.HashimshonyLineages = function()
   xx = xx[match(rownames(timers), xx[,2]), ]
   rownames(xx) = xx[, 2]
   
-  
-  ## import another table from GEO
-  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
-  aa = aa[match(xx$ensEMBL.IDs, rownames(aa)), ]
-  rownames(aa) = rownames(xx)
-  test = mapply(aa, FUN=as.numeric)
-  rownames(test) = rownames(aa)
-  test = log2(test + 2^-6)
-  
   xx = xx[, -c(1, 2)]
   test = mapply(xx, FUN=as.numeric)
   rownames(test) = rownames(xx)
   test = log2(test + 2^-6)
-  
   estimate.timing(test[, 1], timers)
   
+  ## import the table downloaded from GEO
+  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
+  load(file = paste0(dataDir.Hashimsholy, "/annotMapping_ensID_Wormbase_GeneName.Rdata"))
+  
+  names = geneMapping$Gene.name[match(rownames(aa), geneMapping$ensEMBL.IDs)]
+  jj = !is.na(names)
+  bb = aa[jj, ]
+  rownames(bb) = names[jj]
+
+  test = mapply(bb, FUN=as.numeric)
+  rownames(test) = rownames(bb)
+  test = log2(test + 2^-6)
+ 
+  source('customized_clustering.R')
   
   for(kk in c(1:55)){
     # kk = 55
-    cat(colnames(test)[kk], " vs. ", estimate.timing, "min -- corr : ", prediction[index], "\n")
+    timing = estimate.timing.with.timer.genes(vec = test[,kk], PLOT.test = TRUE, timerGenes.pval=0.01, use = 'lowFilter.both')
+    cat(colnames(test)[kk], " vs. ", timing, "min \n")
   }
   
 }
