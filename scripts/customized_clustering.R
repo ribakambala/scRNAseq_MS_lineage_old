@@ -96,7 +96,7 @@ find.timer.genes = function(plot.test = FALSE)
 
 
 estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 0, loess.span = 0.15,
-                                            use = 'lowFilter.timers',
+                                            use = 'lowFilter.timers', lowFilter.threshold.timer = -6, lowFilter.threshold.target = -6, 
                                             reprocess.timer.genes = FALSE, PLOT.test = FALSE)
 {
   # input: 
@@ -126,10 +126,11 @@ estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGen
   timepoints = as.numeric(timepoints)
   
   for(n in 1:ncol(timers)) {
-    if(use == 'lowFilter.timers') ii = which(timers[,n] > (-6))
-    if(use ==  'lowFilter.target') ii = which(vec > (-6)) 
-    if(use ==  'lowFilter.both') ii = which(vec > (-6) & timers[,n] > (-6))
+    if(use == 'lowFilter.timers') ii = which(timers[,n] > lowFilter.threshold.timer)
+    if(use ==  'lowFilter.target') ii = which(vec > lowFilter.threshold.target) 
+    if(use ==  'lowFilter.both') ii = which(vec > lowFilter.threshold.target & timers[,n] > lowFilter.threshold.timer)
     if(use ==  'all') ii = c(1:nrow(timers))
+    #cat('using timer genes -- ', length(ii), "\n")
     corrs[n] = cor(vec[ii], timers[ii,n], method = 'pearson')
   }
   predFun = loess(corrs ~ timepoints, span = loess.span)
