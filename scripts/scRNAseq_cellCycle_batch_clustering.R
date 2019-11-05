@@ -13,13 +13,18 @@
 # http://bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/de.html#2_blocking_on_uninteresting_factors_of_variation)
 ########################################################
 ########################################################
-version.DATA = 'scRNA_R6875_R7116_R7130_R7130redo_R7133_R7926'
-version.analysis =  paste0(version.DATA, '_20190703')
+Import.processed.data.from.Aleks = TRUE
+
+path2AleksFolder = '/Volumes/groups/cochella/Aleks/bioinformatics/GitHub/scRNAseq_MS_lineage'
+version.DATA = 'scRNA_8613_full'
+version.analysis =  paste0(version.DATA, '_20191029')
 
 dataDir = paste0("../data/")
 resDir = paste0("../results/", version.analysis)
 tabDir = paste0("../results/", version.analysis, "/tables/")
 RdataDir = paste0("../results/", version.analysis, "/Rdata/")
+RdataDirfromAleks = paste0(path2AleksFolder, "/results/", version.analysis, "/Rdata/")
+
 if(!dir.exists(resDir)){dir.create(resDir)}
 if(!dir.exists(tabDir)){dir.create(tabDir)}
 if(!dir.exists(RdataDir)){dir.create(RdataDir)}
@@ -32,7 +37,11 @@ if(!dir.exists(RdataDir)){dir.create(RdataDir)}
 ##########################################
 correct.cellCycle = FALSE
 
-load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+if(Import.processed.data.from.Aleks){
+  load(file=paste0(RdataDirfromAleks, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+}else{
+  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
+}
 
 if(correct.cellCycle){
   source("scRNAseq_functions.R")
@@ -80,23 +89,25 @@ set.seed(1234567)
 options(stringsAsFactors = FALSE)
 
 #load(file = file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
-facsInfo.Added = FALSE
-
+facsInfo.Added = TRUE
 ##########################################
 # Here we start to add the facs information in the metadata
 # 
 ##########################################
-if(facsInfo.Added){
-  load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+if(Import.processed.data.from.Aleks){
+  load(file = paste0(RdataDirfromAleks, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata'))
 }else{
-  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
-  
-  source("scRNAseq_functions.R")
-  sce = Integrate.FACS.Information(sce)
-  
-  save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
+  if(facsInfo.Added){
+    load(file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
+  }else{
+    load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2.Rdata')) 
+    
+    source("scRNAseq_functions.R")
+    sce = Integrate.FACS.Information(sce)
+    
+    save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos.Rdata')) 
+  }
 }
-
 # logcounts(sce) =  assay(sce, "logcounts_seurat_SG2MCorrected")
 table(sce$nb.cells)
 sce = sce[, which(sce$nb.cells == 1)]
@@ -109,7 +120,7 @@ plotColData(sce,
             x = "FSC_log2",
             y = "BSC_log2",
             colour_by = "seqInfos",
-            shape_by = "seqInfos"
+            point_size = 2
             
 )
 
@@ -128,12 +139,12 @@ Rescale.Batches = TRUE # scaling data in each batch or not
 k.mnn = 20
 cos.norm = TRUE
 nb.pcs = 50
-order2correct = c(4, 5, 3, 1, 2)
+order2correct = c(12, 11, 10, 9, 8, 1, 2, 3, 4, 5, 6, 7)
 #order2correct = c(3, 4, 1, 2)
 cat("merging order for batch correction :\n", paste0(bc.uniq[order2correct], collapse = "\n"), "\n")
 
 source("scRNAseq_functions.R")
-HVGs = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 2000)
+HVGs = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 3000)
 gene.chosen = match(HVGs, rownames(sce))
 
 cat("nb of HGV : ", length(gene.chosen), "\n")
@@ -158,7 +169,7 @@ if(Use.fastMNN){
     }
     eval(parse(text = ttxt)) ## rescaling done
     
-    kk2check = 2
+    kk2check = 10
     par(mfrow=c(1,1))
     plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
   }
