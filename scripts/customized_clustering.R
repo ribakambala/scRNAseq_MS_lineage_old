@@ -151,6 +151,54 @@ estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGen
   
 }
 
+
+## here is a fast version of estimate.timing.with.timer.genes function
+## where use = 'lowFilter.target'
+fast.estimate.timing.with.timer.genes = function(vec, timer, timepoints, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 0, loess.span = 0.15,
+                                            use = 'lowFilter.target', lowFilter.threshold.target = 0, 
+                                            reprocess.timer.genes = FALSE, PLOT.test = FALSE)
+{
+  if(reprocess.timer.genes){
+    timers = find.timer.genes(plot.test = FALSE)
+    
+    timepoints = gsub('mpfc_','',  colnames(timers)[-c(1:4)])
+    timepoints[c(1:8)] = c('0', '5', '10', '20', '40', '50', '60', '70')
+    timepoints = as.numeric(timepoints)
+    
+    save(timers, timepoints, file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+  }
+  
+  ## select the timer genes using pval and autocorrelation
+  sel.vec = which(vec > lowFilter.threshold.target) 
+  vec = vec[sel.vec]
+  
+  sels.timerGenes = which(timers$ac.max > timerGenes.ac & timers$pval.box < timerGenes.pval)
+  timers = timers[sels.timerGenes, -c(1:4)]
+  
+  # select the common genes shared by timers and vec
+  sharedGenes = intersect(rownames(timers), names(vec))
+  vec = vec[match(sharedGenes, names(vec))]
+  timers = timers[match(sharedGenes, rownames(timers)),]
+  
+  corrs = apply(timers, 2, function(x) cor(vec, x, method = 'pearson'))
+  
+  predFun = loess(corrs ~ timepoints, span = loess.span)
+  prediction = predict(predFun, timepoints, se = FALSE)
+  estimate.timing = timepoints[which(prediction==max(prediction))[1]]
+  
+  if(PLOT.test){
+    par(mfrow = c(1,1))
+    index = which(prediction==max(prediction))
+    plot(timepoints, corrs)
+    points(timepoints, prediction, type = 'l', lwd=1.5, col='darkblue')
+    points(timepoints[index], prediction[index], col = 'darkred', cex = 2.0, pch = 16)
+  }
+  
+  return(estimate.timing)
+  
+}
+
+
 ### test function for 
 Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001, loess.span = 0.15, use = 'lowFilter.both')
 {
@@ -213,13 +261,14 @@ Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001,
 }
 
 
-sc.estimateTiming.with.timer.genes = function(sce)
+sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE)
 {
   ## extract the gene expression matrix from sce object
   test = logcounts(sce)
   
   set.seed(2019)
-  index.test = sample(c(1:ncol(test)), 100)
+  index.test = sample(c(1:ncol(test)), 1000)
+  #index.test = c(1:ncol(test))
   test = test[, index.test]
   
   timerGenes.pval = 0.001
@@ -227,30 +276,47 @@ sc.estimateTiming.with.timer.genes = function(sce)
   use = 'lowFilter.target'
 
   library(tictoc)
-  tic()
-  estimation = rep(NA, ncol(test))
-  for(kk in c(1:ncol(test))){
-    #cat(kk, "\n")
-    estimation[kk] = estimate.timing.with.timer.genes(vec = test[,kk], PLOT.test = FALSE, 
-                                                     timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
-                                                     use = use, lowFilter.threshold.timer = 2)
+  if(fastEstimate){
+    load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
     
+    tic('for loop ')
+    estimation.fast = rep(NA, ncol(test))
+    for(kk in c(1:ncol(test))){
+      #cat(kk, "\n")
+      estimation.fast[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timer = timer, timepoints = timepoints,
+                                                                  PLOT.test = FALSE, 
+                                                                  timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
+                                                                  lowFilter.threshold.target = 2)
+      
+      
+    }
+    toc()
+    
+    par(mfrow = c(1, 3))
+    plot(sce$FSC_log2[index.test], estimation.fast, type='p', 
+         main = paste0('timerGene.pval = ', signif(timerGenes.pval, d= 3), ' & loess.span = ', signif(loess.span, d=2)))
+    plot(sce$BSC_log2[index.test], estimation.fast, type='p') 
+    plot(sce$FSC_log2[index.test], sce$BSC_log2[index.test], type = 'p')
+        
+  }else{
+    tic()
+    estimation = rep(NA, ncol(test))
+    for(kk in c(1:ncol(test))){
+      #cat(kk, "\n")
+      estimation[kk] = estimate.timing.with.timer.genes(vec = test[,kk], PLOT.test = FALSE, 
+                                                        timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
+                                                        use = use, lowFilter.threshold.target = 2)
+      
+    }
+    toc()
+    
+    tic()
+    estimation = apply(test, 2, estimate.timing.with.timer.genes, PLOT.test = FALSE, 
+                       timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
+                       use = use, lowFilter.threshold.target = 2)
+    toc()
   }
-  toc()
   
-  tic()
-  estimation = apply(test, 2, estimate.timing.with.timer.genes, PLOT.test = FALSE, 
-                     timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
-                     use = use, lowFilter.threshold.timer = 2)
-  toc()
-  
-  par(mfrow = c(1, 3))
-  plot(sce$FSC_log2[index.test], estimation, type='p', 
-       main = paste0('timerGene.pval = ', signif(timerGenes.pval, d= 3), ' & loess.span = ', signif(loess.span, d=2)))
-  plot(sce$BSC_log2[index.test], estimation, type='p') 
-  plot(sce$FSC_log2[index.test], sce$BSC_log2[index.test], type = 'p')
-  #abline(0, 1, lwd=2.0, col='darkred')
- 
 }
 
 
