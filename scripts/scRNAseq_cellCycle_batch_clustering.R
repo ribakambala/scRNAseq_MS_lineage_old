@@ -131,7 +131,7 @@ plotColData(sce,
 # here estimat the timing with timer genes
 ### first test 5 lineages from Hashimsholy et al. paper
 ##########################################
-Test.Hashimshony_lineages = TRUE
+Test.Hashimshony_lineages = FALSE
 if(Test.Hashimshony_lineages){
   pdfname = paste0("../results/clustering_combining_variousInfos/test_timing_estimation_Hashimshony_lineages_test1.pdf")
   pdf(pdfname, width=10, height = 6)
@@ -144,7 +144,25 @@ if(Test.Hashimshony_lineages){
 }
 
 source('customized_clustering.R')
-sce = sc.estimateTiming.with.timer.genes(sce)
+sce.test0 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.5, lowFilter.threshold.target = 5, 
+                                               PLOT.test = FALSE)
+sce.test7 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.15, lowFilter.threshold.target = 5, 
+                                              PLOT.test = FALSE)
+
+par(mfrow = c(1, 1))
+plot(sce.test0$timing.est, sce.test7$timing.est); 
+abline(0,1,col = 'red'); 
+abline(-30, 1, col = 'red', lty =2);  
+abline(30, 1, col = 'red', lty = 2)
+abline(-60, 1, col = 'red', lty =3);  
+abline(60, 1, col = 'red', lty = 3)
+
+par(mfrow = c(1, 3))
+plot(sce$FSC_log2, sce.test0$timing.est, type='p', cex = 0.5)
+plot(sce$BSC_log2, sce.test0$timing.est, type='p', cex = 0.5) 
+plot(sce$FSC_log2, sce$BSC_log2, type = 'p', cex = 0.5)
+
+save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEst.Rdata')) 
 
 ########################################################
 # Section : Clustering section by integrating various informations: 
