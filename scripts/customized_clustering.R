@@ -262,23 +262,17 @@ Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001,
 }
 
 
-sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGenes.pval = 0.001, loess.span = 0.15, lowFilter.threshold.target = 5, PLOT.test = FALSE)
+sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGenes.pval = 0.001, loess.span = 0.15, lowFilter.threshold.target = 5, 
+                                              PLOT.test = FALSE)
 {
   ## extract the gene expression matrix from sce object
   test = logcounts(sce)
-  
-  #set.seed(2019)
-  #index.test = sample(c(1:ncol(test)), 1000)
-  #index.test = c(1:ncol(test))
-  #test = test[, index.test]
   
   if(fastEstimate){
     
     # timerGenes.pval = 0.001; loess.span = 0.15; lowFilter.threshold.target = 5
     dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
     load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
-    #library(tictoc)
-    #tic('for loop ')
     estimation.fast = rep(NA, ncol(test))
     for(kk in c(1:ncol(test))){
       estimation.fast[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timers = timers, timepoints = timepoints,
@@ -286,7 +280,55 @@ sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGen
                                                                   timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
                                                                   lowFilter.threshold.target = lowFilter.threshold.target)
     }
-    #toc()
+    sce$timing.est = estimation.fast
+    
+  }else{
+    cat('For the sake of speed, use fastEstimate \n')
+    # estimation = apply(test, 2, estimate.timing.with.timer.genes, PLOT.test = PLOT.test, 
+    #                    timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
+    #                    use = use, lowFilter.threshold.target = lowFilter.threshold.target)
+  }
+  
+  return(sce)
+}
+
+Test.sc.estimateTiming.with.timer.genes = function(sce)
+{
+  
+  ## extract the gene expression matrix from sce object
+  test = logcounts(sce)
+  set.seed(2019)
+  index.test = sample(c(1:ncol(test)), 500)
+  #index.test = c(1:ncol(test))
+  test = test[, index.test]
+  
+  if(fastEstimate){
+    
+    # timerGenes.pval = 0.0001; loess.span = 0.2; lowFilter.threshold.target = 5;  PLOT.test = FALSE
+    dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
+    load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+    library(tictoc)
+    
+    tic('for loop ')
+    estimation.fast = rep(NA, ncol(test))
+    estimation.test = rep(NA, ncol(test))
+    for(kk in c(1:ncol(test))){
+      # kk = 132; PLOT.test = TRUE; cat(estimation.fast[kk], "-- ", estimation.test[kk], "\n")
+      if(kk%%200 == 0) cat(kk, "\n")
+      estimation.fast[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timers = timers, timepoints = timepoints,
+                                                                  PLOT.test = PLOT.test,
+                                                                  timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
+                                                                  lowFilter.threshold.target = lowFilter.threshold.target)
+      
+      estimation.test[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timers = timers, timepoints = timepoints,
+                                                                  PLOT.test = PLOT.test,
+                                                                  timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
+                                                                  lowFilter.threshold.target = 6)
+      
+    }
+    toc()
+    
+    diffs = abs(estimation.fast - estimation.test)
     
     sce$timing.est = estimation.fast
     
@@ -299,7 +341,7 @@ sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGen
       plot(sce$FSC_log2[index.test], sce$BSC_log2[index.test], type = 'p', cex = 0.5)
       
     }
-        
+    
   }else{
     tic()
     estimation = rep(NA, ncol(test))
@@ -319,6 +361,24 @@ sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGen
     toc()
   }
   
-  return(sce)
+  
+  sce.test0 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.5, lowFilter.threshold.target = 5, 
+                                                 PLOT.test = FALSE)
+  sce.test7 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.15, lowFilter.threshold.target = 5, 
+                                                 PLOT.test = FALSE)
+  
+  par(mfrow = c(1, 1))
+  plot(sce.test0$timing.est, sce.test7$timing.est); 
+  abline(0,1,col = 'red'); 
+  abline(-30, 1, col = 'red', lty =2);  
+  abline(30, 1, col = 'red', lty = 2)
+  abline(-60, 1, col = 'red', lty =3);  
+  abline(60, 1, col = 'red', lty = 3)
+  
+  par(mfrow = c(1, 3))
+  plot(sce$FSC_log2, sce.test0$timing.est, type='p', cex = 0.5)
+  plot(sce$BSC_log2, sce.test0$timing.est, type='p', cex = 0.5) 
+  plot(sce$FSC_log2, sce$BSC_log2, type = 'p', cex = 0.5)
   
 }
+
