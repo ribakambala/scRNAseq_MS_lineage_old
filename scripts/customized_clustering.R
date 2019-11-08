@@ -7,15 +7,25 @@
 # Date of creation: Wed Oct 16 11:38:07 2019
 ##########################################################################
 ##########################################################################
-cal_cor_sd_time = function(vec, nb.timepoints = 9){
-  # vec = xx[4, ]
+mycor = function(x, y){
+  x = as.numeric(x)
+  y = as.numeric(y)
+  if(sd(x) < 10^(-6) | sd(y) <10^(-6)){
+    return(NA)
+  }else{
+    return(cor(x, y, method = 'pearson'))
+  }
+}
+
+cal_cor_sd_time = function(vec, ref, nb.timepoints = 8){
+  # vec = xx[2, ]; ref = refs[2, ];nb.timepoints = 8
   nb.vec = length(vec) / nb.timepoints
-  dv = t(matrix(vec, nrow = nb.vec, byrow = TRUE))
-  dv.cor = cor(dv)
-  dv.sd = apply(dv, 2, sd)
+  dv = matrix(vec, nrow = nb.vec, byrow = TRUE)
+ 
+  dv.cor = apply(dv, 1, function(x) mycor(x, ref))
+  #dv.sd = apply(dv, 2, sd)
   
-  return(c(cor.min = min(dv.cor, na.rm = TRUE),  cor.median = median(dv.cor, na.rm = TRUE),
-           sd.min = min(dv.sd, na.rm = TRUE), sd.median = median(dv.sd, na.rm = TRUE)))
+  return(dv.cor)
     
 }
 
@@ -38,6 +48,46 @@ cal_autocor_stationaryTest_sd = function(vec, plot = FALSE, lag.length = 15)
   
 }
 
+doubleCheck_timerGenes_across_lineages = function()
+{
+  ## import the table downloaded from GEO
+  dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
+  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
+  load(file = paste0(dataDir.Hashimsholy, "/annotMapping_ensID_Wormbase_GeneName.Rdata"))
+  
+  names = geneMapping$Gene.name[match(rownames(aa), geneMapping$ensEMBL.IDs)]
+  jj = !is.na(names)
+  bb = aa[jj, ]
+  rownames(bb) = names[jj]
+  
+  test = mapply(bb, FUN=as.numeric)
+  rownames(test) = rownames(bb)
+  test = log2(test + 2^-6)
+  
+  #dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
+  load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+  
+  test = test[match(rownames(timers), rownames(test)), ]
+  
+  o1 = order(timers$pval.box)
+  yy = timers[o1, ]
+  test = test[o1, ]
+  
+  ## select the corresponding time points for timer genes and lineages 
+  test = test[, c(1:44)]
+  kk = grep('tr|E8...|E8..', colnames(test))
+  xx = test[, -c(kk, 31)]
+  
+  refs = yy[, -c(1:5)]
+  time.sels = c(1, 3, 4, 6, 8,9,11,14)
+  refs = refs[, time.sels]
+  
+  for(n in 1:1000){
+    cat(cal_cor_sd_time(xx[n, ], refs[n, ], nb.timepoints = 8), "\n")
+  }
+ 
+  
+}
 
 find.timer.genes = function(plot.test = FALSE)
 {
@@ -108,6 +158,7 @@ estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGen
   }else{
     dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
     load(file =paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval.Rdata"))
+    
   }
   
   ## select the timer genes using pval and autocorrelation
@@ -307,6 +358,8 @@ Test.sc.estimateTiming.with.timer.genes = function(sce)
     # timerGenes.pval = 0.0001; loess.span = 0.2; lowFilter.threshold.target = 5;  PLOT.test = FALSE
     dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
     load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+    
+    
     library(tictoc)
     
     tic('for loop ')
