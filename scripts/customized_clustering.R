@@ -17,13 +17,20 @@ mycor = function(x, y){
   }
 }
 
-cal_cor_sd_time = function(vec, ref, nb.timepoints = 8){
-  # vec = xx[2, ]; ref = refs[2, ];nb.timepoints = 8
+cal_cor_sd_time = function(vec, ref, nb.timepoints = 8, Plot.test = FALSE){
+  # vec = xx[10, ]; ref = refs[10, ];nb.timepoints = 8
   nb.vec = length(vec) / nb.timepoints
   dv = matrix(vec, nrow = nb.vec, byrow = TRUE)
  
   dv.cor = apply(dv, 1, function(x) mycor(x, ref))
   #dv.sd = apply(dv, 2, sd)
+  names(dv.cor) = c('AB', "MS", "E", 'C')
+  
+  if(Plot.test){
+    matplot(c(1:nb.timepoints), t(dv))
+    points(c(1:nb.timepoints), ref, type ='l', lwd =2.0, col='darkblue')
+    
+  }
   
   return(dv.cor)
     
@@ -48,12 +55,70 @@ cal_autocor_stationaryTest_sd = function(vec, plot = FALSE, lag.length = 15)
   
 }
 
-doubleCheck_timerGenes_across_lineages = function()
+##########################################
+# this function is to refine timerGenes by adding the correlation between AB, MS, E, C and whole-embryo
+# to further select genes independent lineages
+# even though the evidence are limited but this is the best we can do
+##########################################
+refine_timerGenes_using_lineages = function(timers)
 {
+  ## import the timer genes
+  Modify.timeponts.Remove.1cellStage.forTimers = FALSE
+  if(Modify.timeponts.Remove.1cellStage.forTimers){
+    dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
+    load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+    
+    kk.1cell = which(colnames(timers) == 'X1_cell')
+    if(length(kk.1cell) == 1) 
+    {
+      timers = timers[, -kk.1cell]
+      timepoints = timepoints[-1]
+      timepoints = timepoints + 20
+      timepoints[1] = 0
+    }
+    save(timers, timepoints, file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+  }else{
+    dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
+    load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+  }
+  
+  ## import the table of five lineages from Hashimsholy et al. paper
   ## import the table downloaded from GEO
   dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
-  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
   load(file = paste0(dataDir.Hashimsholy, "/annotMapping_ensID_Wormbase_GeneName.Rdata"))
+  
+  aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
+ 
+  Compare.lineage.tables.from.Wormbase.vs.GEO = FALSE
+  if(Compare.lineage.tables.from.Wormbase.vs.GEO){
+    require('openxlsx')
+    lineages = read.xlsx(paste0(dataDir.Hashimsholy, "/Hashimshony_datasets_lineage_11timepoints.xlsx"), sheet = 1, startRow = 9, colNames = FALSE)
+    
+    mm = match(rownames(aa), lineages$X1)
+    lineages = lineages[mm, ]
+    
+    #names = lineages[c(1, 2), ]
+    aa2 = lineages[, -c(1, 2)]
+    rownames(aa2) = lineages$X1
+    lineages.names = c('AB_T', 'MS_T', 'E_T', "C_T", 'P3_T')
+    colnames(aa2) = c(as.vector(t(outer(lineages.names, c(1:11), paste, sep=""))))
+    
+    ## keep genes considered as timers
+    # xx = xx[match(rownames(timers), xx[,2]), ]
+    # rownames(xx) = xx[, 2]
+    # xx = xx[, -c(1, 2)]
+    xx = mapply(aa2, FUN=as.numeric)
+    rownames(xx) = rownames(aa2)
+    xx = log2(xx + 2^-6)
+    
+    test = mapply(aa, FUN=as.numeric)
+    rownames(test) = rownames(aa)
+    test = log2(test + 2^-6)
+    
+    n = 4
+    plot(test[, n], xx[, n], cex = 0.4);
+    abline(0, 1, lwd=2.0, col ='red')
+  }
   
   names = geneMapping$Gene.name[match(rownames(aa), geneMapping$ensEMBL.IDs)]
   jj = !is.na(names)
@@ -64,31 +129,51 @@ doubleCheck_timerGenes_across_lineages = function()
   rownames(test) = rownames(bb)
   test = log2(test + 2^-6)
   
-  #dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
-  load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
-  
   test = test[match(rownames(timers), rownames(test)), ]
-  
-  o1 = order(timers$pval.box)
-  yy = timers[o1, ]
-  test = test[o1, ]
-  
   ## select the corresponding time points for timer genes and lineages 
   test = test[, c(1:44)]
-  kk = grep('tr|E8...|E8..', colnames(test))
-  xx = test[, -c(kk, 31)]
+  #kk = grep('tr|E8...|E8..', colnames(test))
+  xx = test[, -c(9:11, (9:11) +11, (9:11) +22, (9:11) +33)]
   
-  refs = yy[, -c(1:5)]
-  time.sels = c(1, 3, 4, 6, 8,9,11,14)
+  refs = timers[, -c(1:4)]
+  time.sels = c(1, 2, 3, 4, 7,8,9,12)
+  cat(timepoints[time.sels], "\n")
+  
   refs = refs[, time.sels]
   
-  for(n in 1:1000){
-    cat(cal_cor_sd_time(xx[n, ], refs[n, ], nb.timepoints = 8), "\n")
+  temporal.cor = matrix(NA, ncol = 4, nrow = nrow(refs))
+  for(n in 1:nrow(refs)){
+    cat(n, "\n")
+    temporal.cor[n, ] = cal_cor_sd_time(xx[n, ], refs[n, ], nb.timepoints = 8)
   }
  
+  colnames(temporal.cor) = c('AB', "MS", "E", 'C')
+  tcors = data.frame(temporal.cor)
+  
+  rownames(tcors) = rownames(timers)
+  
+  save(timers, timepoints, tcors, file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints_tempCorrelation.Rdata"))
+  
+  cutoffs = 0.6
+  kk = which(tcors$AB>cutoffs & tcors$MS>cutoffs & tcors$E>cutoffs & tcors$C>cutoffs & timers$pval.box<0.0001)
+  length(kk)
+  
+  pdfname = paste0("../results/clustering_combining_variousInfos/timerGenes_tempCorrelation_lineages_vs_wholeEmbry.pdf")
+  pdf(pdfname, width=10, height = 6)
+  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+  
+  for(n in 1:100){
+    cal_cor_sd_time(xx[kk[n], ], refs[kk[n], ], nb.timepoints = 8, Plot.test = TRUE)
+  }
+  
+  dev.off()
+  #plot(-log10(timers$pval.box), tcors$AB, cex =0.5)
   
 }
 
+##########################################
+# the main function to find genes showing clear time-depenent patterns in the whole embry data
+##########################################
 find.timer.genes = function(plot.test = FALSE)
 {
   dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
@@ -141,6 +226,7 @@ find.timer.genes = function(plot.test = FALSE)
   rownames(timers) = geneNames[jj]
   
   # save(timers, file =paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval.Rdata"))
+  
   return(timers)
 }
 
@@ -202,7 +288,6 @@ estimate.timing.with.timer.genes = function(vec, timerGenes.pval=0.001, timerGen
   
 }
 
-
 ## here is a fast version of estimate.timing.with.timer.genes function
 ## where use = 'lowFilter.target'
 fast.estimate.timing.with.timer.genes = function(vec, timers, timepoints, timerGenes.pval=0.001, timerGenes.ac=0.5, timerGenes.sd = 0, loess.span = 0.15,
@@ -250,30 +335,9 @@ fast.estimate.timing.with.timer.genes = function(vec, timers, timepoints, timerG
   
 }
 
-
-### test function for 
-Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001, loess.span = 0.15, use = 'lowFilter.both')
+### test timing.estimation using lineages from Hashimshony et al. paper
+Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001, loess.span = 0.15, use = 'lowFilter.target')
 {
-  # require('openxlsx')
-  # lineages = read.xlsx(paste0(dataDir.Hashimsholy, "/Hashimshony_datasets_lineage_11timepoints.xlsx"), sheet = 1, startRow = 9, colNames = FALSE)
-  # 
-  # names = lineages[c(1, 2), ]
-  # xx = lineages[-c(1, 2), ]
-  # 
-  # lineages.names = c('AB_T', 'MS_T', 'E_T', "C_T", 'P3_T')
-  # timepoints = c(1:11)
-  # colnames(xx) = c('ensEMBL.IDs', 'Wormbase',  as.vector(t(outer(lineages.names, timepoints, paste, sep="")))) 
-  # 
-  # ## keep genes considered as timers
-  # xx = xx[match(rownames(timers), xx[,2]), ]
-  # rownames(xx) = xx[, 2]
-  # 
-  # xx = xx[, -c(1, 2)]
-  # test = mapply(xx, FUN=as.numeric)
-  # rownames(test) = rownames(xx)
-  # test = log2(test + 2^-6)
-  # estimate.timing(test[, 1], timers)
-  
   ## import the table downloaded from GEO
   dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
   aa = read.table(paste0(dataDir.Hashimsholy, "/GSE50548_Blastomere_developmental_event_timecourse.txt"), header = TRUE)
@@ -297,7 +361,7 @@ Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001,
     estimation = c(estimation, timing)
   }
   
-  experiments = rep(c(0, 20, 40, 60, 90, 110, 140, 180, 200, 300, 400), 5) + 5
+  experiments = rep(c(0, 20, 40, 60, 90, 110, 140, 180, 200, 300, 400), 5)
   
   plot(experiments, estimation, type='n', main = paste0('timerGene.pval = ', signif(timerGenes.pval, d= 3), ' & loess.span = ', signif(loess.span, d=2)))
   for(n in c(1:5)) {
