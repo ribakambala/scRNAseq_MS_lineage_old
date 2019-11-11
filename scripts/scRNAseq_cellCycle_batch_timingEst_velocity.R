@@ -145,11 +145,14 @@ if(Test.Hashimshony_lineages){
   
 }
 
+## Here we are sampling a range of parameters and timing estimation were done with each of them
+## Whereby we assess the sensibility of our timingEst
 source('customizedClustering_functions.R')
-sce.test0 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001,  lineageCorrs = 0.7, loess.span = 0.5, 
+
+
+sce.test = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, lineageCorrs = 0.5, loess.span = 0.5, 
                                                lowFilter.threshold.target = 5)
-sce.test7 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.15, lowFilter.threshold.target = 5, 
-                                              PLOT.test = FALSE)
+
 
 par(mfrow = c(1, 1))
 plot(sce.test0$timing.est, sce.test7$timing.est); 

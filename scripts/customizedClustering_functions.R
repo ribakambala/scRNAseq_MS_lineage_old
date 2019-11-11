@@ -403,7 +403,7 @@ Test.timingEstimate.with.HashimshonyLineages = function(fastEstimate = TRUE, tim
 }
 
 
-sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGenes.pval = 0.001, loess.span = 0.15, lowFilter.threshold.target = 5, 
+sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGenes.pval = 0.001, lineageCorrs = 0.5, loess.span = 0.15, lowFilter.threshold.target = 5, 
                                               PLOT.test = FALSE)
 {
   ## extract the gene expression matrix from sce object
@@ -414,6 +414,12 @@ sc.estimateTiming.with.timer.genes = function(sce, fastEstimate = TRUE, timerGen
     # timerGenes.pval = 0.001; loess.span = 0.15; lowFilter.threshold.target = 5
     dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
     load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+    
+    if(!is.na(lineageCorrs)){
+      kk = which(tcors$AB> lineageCorrs & tcors$MS > lineageCorrs & tcors$E> lineageCorrs & tcors$C>lineageCorrs & timers$pval.box<timerGenes.pval)
+      timers = timers[kk, ]
+    }
+    
     estimation.fast = rep(NA, ncol(test))
     for(kk in c(1:ncol(test))){
       estimation.fast[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timers = timers, timepoints = timepoints,
