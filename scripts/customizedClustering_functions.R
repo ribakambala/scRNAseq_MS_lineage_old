@@ -313,7 +313,7 @@ fast.estimate.timing.with.timer.genes = function(vec, timers, timepoints, timerG
   
   # select the common genes shared by timers and vec
   sharedGenes = intersect(rownames(timers), names(vec))
-  # cat('nb of timer genes used :', length(sharedGenes), "\n")
+  #cat('nb of timer genes used :', length(sharedGenes), "\n")
   vec = vec[match(sharedGenes, names(vec))]
   timers = timers[match(sharedGenes, rownames(timers)),]
   
@@ -336,7 +336,9 @@ fast.estimate.timing.with.timer.genes = function(vec, timers, timepoints, timerG
 }
 
 ### test timing.estimation using lineages from Hashimshony et al. paper
-Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001, loess.span = 0.15, use = 'lowFilter.target')
+Test.timingEstimate.with.HashimshonyLineages = function(fastEstimate = TRUE, timerGenes.pval = 0.0001, lineageCorrs = NULL, 
+                                                        loess.span = 0.15, lowFilter.threshold.target = 5,
+                                                        use = 'lowFilter.target', PLOT.test = FALSE)
 {
   ## import the table downloaded from GEO
   dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
@@ -352,26 +354,50 @@ Test.timingEstimate.with.HashimshonyLineages = function(timerGenes.pval = 0.001,
   rownames(test) = rownames(bb)
   test = log2(test + 2^-6)
   
-  estimation = c()
-  for(kk in c(1:55)){
-    # kk = 55
-    timing = estimate.timing.with.timer.genes(vec = test[,kk], PLOT.test = TRUE, timerGenes.pval=timerGenes.pval, use = use, 
-                                              loess.span = loess.span)
-    cat(colnames(test)[kk], " vs. ", timing, "min \n")
-    estimation = c(estimation, timing)
+  estimation = rep(NA, ncol(test))
+  
+  if(fastEstimate){
+    # timerGenes.pval = 0.001; loess.span = 0.15; lowFilter.threshold.target = 5
+    dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
+    load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
+    
+    if(!is.na(lineageCorrs)){
+      kk = which(tcors$AB> lineageCorrs & tcors$MS > lineageCorrs & tcors$E> lineageCorrs & tcors$C>lineageCorrs & timers$pval.box<timerGenes.pval)
+      timers = timers[kk, ]
+      cat('nb of timer genes after filtering : ', length(kk), "\n")
+    }
+    
   }
   
-  experiments = rep(c(0, 20, 40, 60, 90, 110, 140, 180, 200, 300, 400), 5)
+  for(kk in c(1:ncol(test))){
+    if(fastEstimate){
+      estimation[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timers = timers, timepoints = timepoints,
+                                                             PLOT.test = PLOT.test,
+                                                             timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
+                                                             lowFilter.threshold.target = lowFilter.threshold.target)
+    }else{
+      estimation[kk] = estimate.timing.with.timer.genes(vec = test[,kk], PLOT.test = PLOT.test, timerGenes.pval=timerGenes.pval, use = use, 
+                                                        loess.span = loess.span)
+    }
+    
+    #cat(colnames(test)[kk], " vs. ", estimation[kk], "min \n")
+    
+  }
   
-  plot(experiments, estimation, type='n', main = paste0('timerGene.pval = ', signif(timerGenes.pval, d= 3), ' & loess.span = ', signif(loess.span, d=2)))
+  
+  ## compare the estimation with experiment timing
+  experiments = rep(c(0, 20, 40, 60, 90, 110, 140, 180, 200, 300, 400), 5)
+  plot(experiments, estimation, type='n', main = paste0('timerGene.pval = ', signif(timerGenes.pval, d= 3), ' & loess.span = ', signif(loess.span, d=2)), 
+       xlim = c(0, 200), ylim = c(0, 200))
   for(n in c(1:5)) {
     index = seq(11*(n-1)+1, 11*n, by = 1)
     points(experiments[index], estimation[index], pch = n, cex = 1.2, col = 'darkblue')
   }
   abline(0, 1, lwd=2.0, col='darkred')
-  abline(-20, 1, lwd=1.0, col='darkred', lty = 2)
-  abline(-40, 1, lwd=1.0, col='darkred', lty= 2)
-  abline(-60, 1, lwd=1.0, col='darkred', lty= 2)
+  abline(-30, 1, lwd=1.0, col='darkred', lty = 2)
+  abline(30, 1, lwd=1.0, col='darkred', lty= 2)
+  abline(-60, 1, lwd=1.0, col='darkred', lty= 3)
+  abline(60, 1, lwd=1.0, col='darkred', lty= 3)
   legend('topleft', legend = c('AB', 'MS', 'E', 'C', 'P3'), pch = c(1:5), col = 'darkblue', bty = 'n')
   
 }
@@ -419,10 +445,14 @@ Test.sc.estimateTiming.with.timer.genes = function(sce)
   
   if(fastEstimate){
     
-    # timerGenes.pval = 0.0001; loess.span = 0.2; lowFilter.threshold.target = 5;  PLOT.test = FALSE
+    # timerGenes.pval = 0.0001; loess.span = 0.5; lowFilter.threshold.target = 5;  PLOT.test = FALSE;  lineageCorrs = 0.5; timerGenes.ac = 0.5
     dataDir.Hashimsholy = '../data/Hashimsholy_et_al'
     load(file = paste0(dataDir.Hashimsholy, "/timer_genes_with_ac_pval_plus_timepoints.Rdata"))
-    
+   
+    ## filter timers with lineageCorrecations
+    kk = which(tcors$AB> lineageCorrs & tcors$MS > lineageCorrs & tcors$E> lineageCorrs & tcors$C>lineageCorrs & timers$pval.box<timerGenes.pval)
+    timers = timers[kk, ]
+    cat('nb of timer genes after filtering : ', length(kk), "\n")
     
     library(tictoc)
     
@@ -431,7 +461,18 @@ Test.sc.estimateTiming.with.timer.genes = function(sce)
     estimation.test = rep(NA, ncol(test))
     for(kk in c(1:ncol(test))){
       # kk = 132; PLOT.test = TRUE; cat(estimation.fast[kk], "-- ", estimation.test[kk], "\n")
-      if(kk%%200 == 0) cat(kk, "\n")
+      #if(kk%%200 == 0) cat(kk, "\n")
+      vec = test[,kk]
+      sel.vec = which(vec > lowFilter.threshold.target) 
+      vec = vec[sel.vec]
+      
+      sels.timerGenes = which(timers$ac.max > timerGenes.ac & timers$pval.box < timerGenes.pval)
+      #timers = timers[sels.timerGenes, -c(1:4)]
+      
+      # select the common genes shared by timers and vec
+      sharedGenes = intersect(rownames(timers), names(vec))
+      cat('nb of timer genes used :', length(sharedGenes), "\n")
+      
       estimation.fast[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timers = timers, timepoints = timepoints,
                                                                   PLOT.test = PLOT.test,
                                                                   timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
@@ -439,13 +480,19 @@ Test.sc.estimateTiming.with.timer.genes = function(sce)
       
       estimation.test[kk] = fast.estimate.timing.with.timer.genes(vec = test[,kk], timers = timers, timepoints = timepoints,
                                                                   PLOT.test = PLOT.test,
-                                                                  timerGenes.pval= timerGenes.pval, loess.span = loess.span, 
-                                                                  lowFilter.threshold.target = 6)
+                                                                  timerGenes.pval= timerGenes.pval, loess.span = 0.7, 
+                                                                  lowFilter.threshold.target = 5)
       
     }
     toc()
     
     diffs = abs(estimation.fast - estimation.test)
+    plot(estimation.fast, estimation.test)
+    abline(0, 1, lwd=2.0, col='darkred')
+    abline(-30, 1, lwd=1.0, col='darkred', lty = 2)
+    abline(30, 1, lwd=1.0, col='darkred', lty= 2)
+    #abline(-60, 1, lwd=1.0, col='darkred', lty= 3)
+    #abline(60, 1, lwd=1.0, col='darkred', lty= 3)
     
     sce$timing.est = estimation.fast
     

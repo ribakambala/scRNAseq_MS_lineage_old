@@ -133,21 +133,21 @@ plotColData(sce,
 ##########################################
 Test.Hashimshony_lineages = FALSE
 if(Test.Hashimshony_lineages){
-  pdfname = paste0("../results/clustering_combining_variousInfos/test_timing_estimation_Hashimshony_lineages_test_with_improvedTimerGenes_v1.pdf")
+  pdfname = paste0("../results/clustering_combining_variousInfos/test_timing_estimation_Hashimshony_lineages_test_with_improvedTimerGenes_v2.pdf")
   pdf(pdfname, width=10, height = 6)
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
   source('customizedClustering_functions.R')
-  Test.timingEstimate.with.HashimshonyLineages(fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.5, lowFilter.threshold.target = 5, 
+  Test.timingEstimate.with.HashimshonyLineages(fastEstimate = TRUE, timerGenes.pval = 0.0001, lineageCorrs = 0.7,  loess.span = 0.5, lowFilter.threshold.target = 5, 
                                                PLOT.test = FALSE)
   
   dev.off()
   
 }
 
-source('customized_clustering.R')
-sce.test0 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.5, lowFilter.threshold.target = 5, 
-                                               PLOT.test = FALSE)
+source('customizedClustering_functions.R')
+sce.test0 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001,  lineageCorrs = 0.7, loess.span = 0.5, 
+                                               lowFilter.threshold.target = 5)
 sce.test7 = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = 0.0001, loess.span = 0.15, lowFilter.threshold.target = 5, 
                                               PLOT.test = FALSE)
 
