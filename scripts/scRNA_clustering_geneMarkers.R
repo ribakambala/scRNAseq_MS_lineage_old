@@ -8,6 +8,14 @@
 # http://bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/de.html#2_blocking_on_uninteresting_factors_of_variation
 ########################################################
 ########################################################
+
+########################################################
+# Section : Clustering section by integrating various informations: 
+# gene expression, fac info, estimated timing and velocity 
+########################################################
+########################################################
+
+
 library(scater)
 library(scran)
 library(scRNA.seq.funcs)

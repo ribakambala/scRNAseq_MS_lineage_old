@@ -131,67 +131,68 @@ plotColData(sce,
 # here estimat the timing with timer genes
 ### first test 5 lineages from Hashimsholy et al. paper
 ##########################################
-Test.Hashimshony_lineages = FALSE
-if(Test.Hashimshony_lineages){
-  pdfname = paste0("../results/clustering_combining_variousInfos/test_timing_estimation_Hashimshony_lineages_test_with_improvedTimerGenes_v2.pdf")
-  pdf(pdfname, width=10, height = 6)
-  par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+reEstimate.timing.using.timer.genes = FALSE
+if(reEstimate.timing.using.timer.genes){
+  Test.Hashimshony_lineages = FALSE
   
+  if(Test.Hashimshony_lineages){
+    pdfname = paste0("../results/clustering_combining_variousInfos/test_timing_estimation_Hashimshony_lineages_test_with_improvedTimerGenes_v2.pdf")
+    pdf(pdfname, width=10, height = 6)
+    par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
+    
+    source('customizedClustering_functions.R')
+    Test.timingEstimate.with.HashimshonyLineages(fastEstimate = TRUE, timerGenes.pval = 0.0001, lineageCorrs = 0.7,  loess.span = 0.5, lowFilter.threshold.target = 5, 
+                                                 PLOT.test = FALSE)
+    
+    dev.off()
+    
+  }
+  
+  ## Here we are sampling a range of parameters and timing estimation were done with each of them
+  ## Whereby we assess the sensibility of our timingEst
+  ## this will take some time to finish
   source('customizedClustering_functions.R')
-  Test.timingEstimate.with.HashimshonyLineages(fastEstimate = TRUE, timerGenes.pval = 0.0001, lineageCorrs = 0.7,  loess.span = 0.5, lowFilter.threshold.target = 5, 
-                                               PLOT.test = FALSE)
   
-  dev.off()
-  
-}
-
-## Here we are sampling a range of parameters and timing estimation were done with each of them
-## Whereby we assess the sensibility of our timingEst
-## this will take some time to finish
-source('customizedClustering_functions.R')
-
-timingEst = c()
-for(pv in c(0.001, 0.0001, 0.00001))
-{
-  for(cutoff.expr in c(4, 5, 6))
+  timingEst = c()
+  for(pv in c(0.001, 0.0001, 0.00001))
   {
-    for(s in c(0.3, 0.5, 0.7))
+    for(cutoff.expr in c(4, 5, 6))
     {
-      cat('pv = ', pv, ' cutoff.expr = ', cutoff.expr, 's = ', s, "\n")
-      sce.test = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = pv, lineageCorrs = 0.5, loess.span = s, 
-                                                    lowFilter.threshold.target = cutoff.expr)
-      timingEst = rbind(timingEst, sce.test$timing.est)
+      for(s in c(0.3, 0.5, 0.7))
+      {
+        cat('pv = ', pv, ' cutoff.expr = ', cutoff.expr, 's = ', s, "\n")
+        sce.test = sc.estimateTiming.with.timer.genes(sce, fastEstimate = TRUE, timerGenes.pval = pv, lineageCorrs = 0.5, loess.span = s, 
+                                                      lowFilter.threshold.target = cutoff.expr)
+        timingEst = rbind(timingEst, sce.test$timing.est)
+      }
     }
   }
+  
+  #save(sce, timingEst, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos_timeEst_tmp.Rdata')) 
+  
+  timingEst = t(timingEst)
+  timingEst = as.matrix(timingEst)
+  #colnames(timingEst) = c(as.vector(t(outer(c(0.001, 0.0001, 0.00001), c(4:6), paste, sep=""))))
+  find.one.close.to.mean = function(x){
+    # x = timingEst[1, ]
+    difs = abs(x - mean(x))
+    return(x[which(difs == min(difs))[1]])
+  }
+  sce$timingEst = apply(timingEst, 1, find.one.close.to.mean)
+  sce$timingEst.sd = apply(timingEst, 1, sd)
+  
+  save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEst.Rdata')) 
+}else{
+  load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEst.Rdata'))
 }
 
-#save(sce, timingEst, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrectedv2_facsInfos_timeEst_tmp.Rdata')) 
-
-timingEst = t(timingEst)
-timingEst = as.matrix(timingEst)
-#colnames(timingEst) = c(as.vector(t(outer(c(0.001, 0.0001, 0.00001), c(4:6), paste, sep=""))))
-find.one.close.to.mean = function(x){
-  # x = timingEst[1, ]
-  difs = abs(x - mean(x))
-  return(x[which(difs == min(difs))[1]])
-}
-sce$timingEst = apply(timingEst, 1, find.one.close.to.mean)
-sce$timingEst.sd = apply(timingEst, 1, sd)
-
-# par(mfrow = c(1, 1))
-# plot(sce.test0$timing.est, sce.test7$timing.est); 
-# abline(0,1,col = 'red'); 
-# abline(-30, 1, col = 'red', lty =2);  
-# abline(30, 1, col = 'red', lty = 2)
-# abline(-60, 1, col = 'red', lty =3);  
-# abline(60, 1, col = 'red', lty = 3)
 
 par(mfrow = c(1, 3))
 plot(sce$FSC_log2, sce$timingEst, type='p', cex = 0.5)
 plot(sce$BSC_log2, sce$timingEst, type='p', cex = 0.5) 
 plot(sce$FSC_log2, sce$BSC_log2, type = 'p', cex = 0.5)
 
-save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEst.Rdata')) 
+
 
 plotColData(sce,
             x = "FSC_log2",
@@ -214,12 +215,15 @@ ggplot(cdata, aes(x=FSC_log2, y=BSC_log2, color=timingEst)) +
   # scale_color_brewer(palette="Dark2")
   # scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9"))
   # scale_color_brewer(palette="Paired") + theme_classic()
-########################################################
-# Section : Clustering section by integrating various informations: 
-# gene expression, fac info, estimated timing and velocity 
-########################################################
-########################################################
 
+
+########################################################
+########################################################
+# Section : Batch Correction
+# Batch correction using fastMNN from scran
+# here we are using fastMNN
+########################################################
+########################################################
 
 ##########################################
 # Feature selection (select HGVs) for batch corrections
@@ -246,10 +250,7 @@ gene.chosen = match(HVGs, rownames(sce))
 
 cat("nb of HGV : ", length(gene.chosen), "\n")
 
-##########################################
-# Batch correction using fastMNN from scran
-# here we are using fastMNN
-##########################################
+
 if(Use.fastMNN){
   ## rescaling for each batch is recommended by the author
   ## We adjust the size factors with multiBatchNorm() to make them more comparable across batches. 
