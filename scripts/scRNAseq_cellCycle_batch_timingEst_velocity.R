@@ -13,9 +13,6 @@
 # http://bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/de.html#2_blocking_on_uninteresting_factors_of_variation)
 ########################################################
 ########################################################
-Import.processed.data.from.Aleks = TRUE
-correct.cellCycle = FALSE
-
 path2AleksFolder = '/Volumes/groups/cochella/Aleks/bioinformatics/GitHub/scRNAseq_MS_lineage'
 version.DATA = 'scRNA_8613_full'
 version.analysis =  paste0(version.DATA, '_20191029')
@@ -36,6 +33,8 @@ if(!dir.exists(RdataDir)){dir.create(RdataDir)}
 # we need to train the cells to identify the cell cycle phase
 # this could be more complicated than expected
 ##########################################
+correct.cellCycle = FALSE
+Import.processed.data.from.Aleks = TRUE
 if(Import.processed.data.from.Aleks){
   load(file=paste0(RdataDirfromAleks, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE.Rdata'))
 }else{
@@ -81,13 +80,6 @@ if(correct.cellCycle){
 # But many of them, e.g. BASics, Brennecke works better with spike-in 
 ##########################################
 ##########################################
-library(scRNA.seq.funcs)
-library(scater)
-library(SingleCellExperiment)
-library(scran)
-library(kBET)
-set.seed(1234567)
-options(stringsAsFactors = FALSE)
 
 #load(file = file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos.Rdata'))
 facsInfo.Added = TRUE
@@ -123,7 +115,7 @@ sce$BSC_log2 = 3/2*log2(sce$BSC)
 plotColData(sce,
             x = "FSC_log2",
             y = "BSC_log2",
-            colour_by = "seqInfos",
+            colour_by = "request",
             point_size = 1
 )
 
@@ -192,30 +184,28 @@ plot(sce$FSC_log2, sce$timingEst, type='p', cex = 0.5)
 plot(sce$BSC_log2, sce$timingEst, type='p', cex = 0.5) 
 plot(sce$FSC_log2, sce$BSC_log2, type = 'p', cex = 0.5)
 
-
-
-plotColData(sce,
-            x = "FSC_log2",
-            y = "BSC_log2",
-            colour_by = "timingEst.sd",
-            shape_by = 'timingEst'
-)
-
 cdata = colData(sce)
-cdata = data.frame(cdata)
-cdata$timingEst = cdata$timingEst/50
+cdata = data.frame(cdata[, c((ncol(cdata)-3): ncol(cdata))])
+#cdata$timingEst = cdata$timingEst/50
 
-mid<-mean(cdata$timingEst)
-ggplot(cdata, aes(x=FSC_log2, y=BSC_log2, color=timingEst)) +
+cdata$timing.group = NA
+cdata$timing.group[which(cdata$timingEst < 50)] = 1
+cdata$timing.group[which(cdata$timingEst >= 450)] = 10
+for(n in 2:9){cdata$timing.group[which(cdata$timingEst >= (n-1)*50 & cdata$timingEst < n*50)] = n}
+
+cdata$timing.sd.group = 2
+cdata$timing.sd.group[which(cdata$timingEst.sd<30)] = 1
+#cdata$timing.sd.group[which(cdata$timingEst.sd>=30 & cdata$timingEst.sd<60)] = 2
+cdata$timing.sd.group = as.factor(cdata$timing.sd.group)
+
+ggplot(cdata, aes(x=FSC_log2, y=BSC_log2, color=timingEst, shape = timing.sd.group)) +
   geom_point() + 
-  scale_color_gradient2(midpoint=mid, low="blue", mid="white",
-                        high="red", space ="Lab" )
+  scale_color_gradientn(colours = rainbow(10))
 
-  # scale_color_gradient(low="blue", high="red")
-  # scale_color_brewer(palette="Dark2")
-  # scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9"))
-  # scale_color_brewer(palette="Paired") + theme_classic()
+sce$timingEst.group = cdata$timing.group
+sce$timingEst.sd.group = cdata$timing.sd.group
 
+save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEstGroups.Rdata'))
 
 ########################################################
 ########################################################
@@ -230,7 +220,20 @@ ggplot(cdata, aes(x=FSC_log2, y=BSC_log2, color=timingEst)) +
 # there are two options: batch-specific or use batch as block
 # https://www.bioconductor.org/packages/devel/workflows/vignettes/simpleSingleCell/inst/doc/batch.html
 ##########################################
-batches = sce$seqInfos # choose the batches (either plates or request)
+library(scRNA.seq.funcs)
+library(scater)
+library(SingleCellExperiment)
+library(scran)
+library(kBET)
+set.seed(1234567)
+options(stringsAsFactors = FALSE)
+
+
+load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEstGroups.Rdata'))
+
+# choose the batches (either plates or request)
+# here we choose the request as batch
+batches = sce$request 
 bc.uniq = unique(batches)
 sce$batches <- batches
 
@@ -240,9 +243,46 @@ Rescale.Batches = TRUE # scaling data in each batch or not
 k.mnn = 20
 cos.norm = TRUE
 nb.pcs = 50
-order2correct = c(12, 11, 10, 9, 8, 1, 2, 3, 4, 5, 6, 7)
+
+batch.sequence.to.merge = c('R7130', 'R8612', 'R8526', 'R7926', # 3 plates for each request
+                            'R6875','R7116','R8613','R8348') # 1 plate for each request
+
+order2correct = match(batch.sequence.to.merge, bc.uniq) 
+  #c(12, 13, # the same 
+  #                10, 9, 8, 5, 6, 7,  8, 11, 1, 2, 3, 4)
+#order2correct = c(15,14,13,12,11,10,9,8, 1, 2, 3, 4, 5,6,7 )
 #order2correct = c(3, 4, 1, 2)
-cat("merging order for batch correction :\n", paste0(bc.uniq[order2correct], collapse = "\n"), "\n")
+
+## double chekc  the mering order in the batch correction
+source('customizedClustering_functions.R')
+kk = match(sce$request, c('R7130', 'R7926', 'R8526', 'R8612'))
+kk = match(sce$request, c('R7130', 'R6875', 'R7116', 'R8348'))
+plotColData(sce[,which(!is.na(kk))],
+            x = "FSC_log2",
+            y = "BSC_log2",
+            colour_by = "request",
+            point_size = 1
+)
+
+#cat("merging order for batch correction :\n", paste0(bc.uniq[order2correct], collapse = "\n"), "\n")
+for(n in 1:length(order2correct)){
+  
+  #n = 11
+  kk = order2correct[n]
+  
+  p = plotColData(sce[, which(sce$batches== bc.uniq[kk])],
+              x = "FSC_log2",
+              y = "BSC_log2",
+              colour_by = "timingEst",
+              point_size = 1
+              
+  )
+  plot(p)
+  
+  cat('#', n, 'batch:',  bc.uniq[kk], ': ', length(which(sce$batches == bc.uniq[kk])), 'cells \n')
+  
+}
+
 
 source("scRNAseq_functions.R")
 HVGs = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 3000)
@@ -267,7 +307,7 @@ if(Use.fastMNN){
     }
     eval(parse(text = ttxt)) ## rescaling done
     
-    kk2check = 10
+    kk2check = 1
     par(mfrow=c(1,1))
     plot(sizeFactors(nout[[kk2check]]), sizeFactors(sce[, which(sce$batches == bc.uniq[kk2check])])); abline(0, 1, col='red')
   }
@@ -314,9 +354,12 @@ if(Use.fastMNN){
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
   set.seed(1001)
-  nb.MNN.to.use = 15
-  sce <- runUMAP(sce, use_dimred="MNN", n_dimred = nb.MNN.to.use, ncomponents = 2)
-  p = plotUMAP(sce, ncomponents = 2, colour_by="mnn_Batch", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
+  nb.MNN.to.use = 10
+  sce <- runUMAP(sce, use_dimred="MNN", n_dimred = nb.MNN.to.use, ncomponents = 2, scale_features = FALSE,
+                 method = c("umap-learn"))
+  
+  sce$timingEst.group = as.factor(sce$timingEst.group)
+  p = plotUMAP(sce, ncomponents = 2, colour_by="timingEst.group", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
   plot(p)
   
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
@@ -326,7 +369,10 @@ if(Use.fastMNN){
     fontsize + ggtitle("MNN corrected")
   multiplot(p1, p2, cols = 2)
   
-  sce = runTSNE(sce, use_dimred="MNN", perplexity = 20, n_dimred = nb.MNN.to.use)
+  sce = runTSNE(sce, use_dimred="MNN", perplexity = 30, n_dimred = nb.MNN.to.use)
+  p = plotTSNE(sce, colour_by="timingEst", size_by = "FSC_log2") + 
+    fontsize + ggtitle("MNN corrected")
+  
   p1 = plotTSNE(sce, colour_by="pha-4", size_by = "FSC_log2") + 
     fontsize + ggtitle("MNN corrected")
   p2 = plotTSNE(sce, colour_by="hnd-1", size_by = "FSC_log2") + 

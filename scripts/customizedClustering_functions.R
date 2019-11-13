@@ -552,3 +552,20 @@ Test.sc.estimateTiming.with.timer.genes = function(sce)
   
 }
 
+
+readkeygraph <- function(prompt)
+{
+  getGraphicsEvent(prompt = prompt, 
+                   onMouseDown = NULL, onMouseMove = NULL,
+                   onMouseUp = NULL, onKeybd = onKeybd,
+                   consolePrompt = "[click on graph then follow top prompt to continue]")
+  Sys.sleep(0.01)
+  return(keyPressed)
+}
+
+onKeybd <- function(key)
+{
+  keyPressed <<- key
+}
+
+
