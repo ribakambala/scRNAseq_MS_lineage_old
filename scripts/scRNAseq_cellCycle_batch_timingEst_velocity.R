@@ -228,8 +228,10 @@ library(kBET)
 set.seed(1234567)
 options(stringsAsFactors = FALSE)
 
-
 load(file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEstGroups.Rdata'))
+
+sce$timingEst = as.factor(sce$timingEst)
+sce$timingEst.group = as.factor(sce$timingEst.group)
 
 # choose the batches (either plates or request)
 # here we choose the request as batch
@@ -239,7 +241,7 @@ sce$batches <- batches
 
 Use.fastMNN = TRUE
 Norm.Vars.per.batch = TRUE # HVGs for each batch or not 
-Rescale.Batches = TRUE # scaling data in each batch or not 
+Rescale.Batches = FALSE # scaling data in each batch or not 
 k.mnn = 20
 cos.norm = TRUE
 nb.pcs = 50
@@ -285,7 +287,7 @@ for(n in 1:length(order2correct)){
 
 
 source("scRNAseq_functions.R")
-HVGs = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 3000)
+HVGs = find.HVGs(sce, Norm.Vars.per.batch = Norm.Vars.per.batch, method = "scran", ntop = 2000)
 gene.chosen = match(HVGs, rownames(sce))
 
 cat("nb of HGV : ", length(gene.chosen), "\n")
@@ -354,13 +356,21 @@ if(Use.fastMNN){
   par(cex =0.7, mar = c(3,3,2,0.8)+0.1, mgp = c(1.6,0.5,0),las = 0, tcl = -0.3)
   
   set.seed(1001)
-  nb.MNN.to.use = 10
+  nb.MNN.to.use = 20
   sce <- runUMAP(sce, use_dimred="MNN", n_dimred = nb.MNN.to.use, ncomponents = 2, scale_features = FALSE,
                  method = c("umap-learn"))
   
-  sce$timingEst.group = as.factor(sce$timingEst.group)
-  p = plotUMAP(sce, ncomponents = 2, colour_by="timingEst.group", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected") 
+  p = plotUMAP(sce, ncomponents = 2, colour_by="timingEst.group", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected")
   plot(p)
+  
+  require(Seurat)
+  pbmc = as.Seurat(sce)
+  
+  pbmc <- Seurat::RunUMAP(pbmc, dims = 1:15, reduction = "MNN", 
+                          reduction.key = "umap", n.neighbors = 20, repulsion.strength = 1)
+  
+  DimPlot(pbmc, reduction = "umap", group.by = 'timingEst')
+  
   
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
   p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
@@ -454,10 +464,6 @@ if(Use.fastMNN){
     n_repeat = 200,
     plot = TRUE)
   
-  #require('FNN')
-  # data: a matrix (rows: samples, columns: features (genes))
-  #k0=floor(mean(table(sce.tmp$batches))) #neighbourhood size: mean batch size 
-  #knn <- get.knn(, k=k0, algorithm = 'cover_tree')
   kbet.bc = kBET(
     df = t(reducedDim(sce.tmp, "MNN")), 
     batch = sce.tmp$mnn_Batch,
