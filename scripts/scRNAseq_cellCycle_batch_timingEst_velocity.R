@@ -193,20 +193,26 @@ cdata$timing.group[which(cdata$timingEst < 50)] = 1
 cdata$timing.group[which(cdata$timingEst >= 450)] = 10
 for(n in 2:9){cdata$timing.group[which(cdata$timingEst >= (n-1)*50 & cdata$timingEst < n*50)] = n}
 
-cdata$timing.sd.group = 2
+cdata$timing.sd.group = 3
 cdata$timing.sd.group[which(cdata$timingEst.sd<30)] = 1
-#cdata$timing.sd.group[which(cdata$timingEst.sd>=30 & cdata$timingEst.sd<60)] = 2
+cdata$timing.sd.group[which(cdata$timingEst.sd>=30 & cdata$timingEst.sd<60)] = 2
 cdata$timing.sd.group = as.factor(cdata$timing.sd.group)
 
 ggplot(cdata, aes(x=FSC_log2, y=BSC_log2, color=timingEst, shape = timing.sd.group)) +
   geom_point() + 
   scale_color_gradientn(colours = rainbow(10))
 
-sce$timingEst.group = cdata$timing.group
-sce$timingEst.sd.group = cdata$timing.sd.group
+sce$timingEst = as.factor(sce$timingEst)
+sce$timingEst.group = as.factor(cdata$timing.group)
+sce$timingEst.sd.group = as.factor(cdata$timing.sd.group)
 
 save(sce, file=paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_facsInfos_timingEstGroups.Rdata'))
-
+plotColData(sce,
+            x = "FSC_log2",
+            y = "BSC_log2",
+            colour_by = "timingEst.group",
+            point_size = 1
+)
 ########################################################
 ########################################################
 # Section : Batch Correction
@@ -363,15 +369,6 @@ if(Use.fastMNN){
   p = plotUMAP(sce, ncomponents = 2, colour_by="timingEst.group", size_by = "FSC_log2", point_size= 0.01) + ggtitle("Corrected")
   plot(p)
   
-  require(Seurat)
-  pbmc = as.Seurat(sce)
-  
-  pbmc <- Seurat::RunUMAP(pbmc, dims = 1:15, reduction = "MNN", 
-                          reduction.key = "umap", n.neighbors = 20, repulsion.strength = 1)
-  
-  DimPlot(pbmc, reduction = "umap", group.by = 'timingEst')
-  
-  
   fontsize <- theme(axis.text=element_text(size=12), axis.title=element_text(size=12))
   p1 = plotUMAP(sce, colour_by="pha-4", size_by = "FSC_log2") + 
     fontsize + ggtitle("MNN corrected")
@@ -480,4 +477,27 @@ if(Use.fastMNN){
 
 save(sce, file = paste0(RdataDir, version.DATA, '_QCed_cells_genes_filtered_normalized_SCE_seuratCellCycleCorrected_v2_bcMNN.Rdata'))
 
+##########################################
+# Convert sce object to Seurat object 
+# check UMAP and tSNE 
+##########################################
+require(Seurat)
+pbmc = as.Seurat(sce)
+
+#pbmc = Seurat::RunPCA(pbmc, pbmc, )
+pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+pbmc <- ScaleData(pbmc, features = rownames(pbmc))
+pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+
+#pbmc <- RunPCA(pbmc, features = HVGs)
+
+pbmc <- Seurat::RunUMAP(pbmc, dims = 1:15, reduction = "MNN", 
+                        reduction.key = "umap", n.neighbors = 20, repulsion.strength = 1)
+
+DimPlot(pbmc, reduction = "umap", group.by = 'timingEst')
+
+pbmc <- Seurat::RunUMAP(pbmc, dims = 1:15, reduction = "pca", 
+                        reduction.key = "umap.pca", n.neighbors = 20, repulsion.strength = 1)
+
+DimPlot(pbmc, reduction = "umap", group.by = 'timingEst')
 
